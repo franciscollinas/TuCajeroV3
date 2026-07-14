@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "outDir": "dist/main",
+    "declaration": false,
+    "sourceMap": false
+  },
+  "include": ["app/main/**/*.ts"],
+  "exclude": ["node_modules"]
+}

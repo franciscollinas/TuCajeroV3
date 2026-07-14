@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@shared/*": ["app/renderer/src/shared/*"],
+      "@modules/*": ["app/renderer/src/modules/*"],
+      "@config/*": ["config/*"],
+      "@db/*": ["database/*"]
+    }
+  },
+  "include": ["app/renderer/src", "config", "database"],
+  "exclude": ["node_modules", "dist", "release"]
+}

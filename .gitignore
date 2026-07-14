@@ -1,0 +1,20 @@
+node_modules/
+dist/
+release/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.env
+.env.local
+*.log
+.DS_Store
+Thumbs.db
+
+# Nested separate project (own git repo) and tool internal state
+tucajero-saas-web/
+.kilo/
+.agents/
+
+# Stray Windows artifact
+nul

@@ -1,0 +1,43 @@
+appId: com.tucajero.pos
+productName: TuCajero
+directories:
+  output: release
+files:
+  - dist/**/*
+  - app/renderer/public/**/*
+  - node_modules/**/*
+  - package.json
+  - '!node_modules/@types/**/*'
+  - '!node_modules/.bin/**/*'
+  - '!node_modules/typescript/**/*'
+  - '!**/*.ts'
+  - '!**/*.tsx'
+  - '!**/*.map'
+  - '!**/*.md'
+  - '!**/tests/**/*'
+asar: true
+asarUnpack:
+  - '**/*.node'
+  - 'node_modules/better-sqlite3/**/*'
+
+win:
+  target:
+    - nsis
+    - portable
+  icon: build/icon.ico
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: TuCajero
+  createStartMenuShortcut: true
+
+publish:
+  provider: github
+  owner: franciscollinas
+  repo: TuCajeroV3
+  releaseType: release
+  private: false
+
+compression: maximum
