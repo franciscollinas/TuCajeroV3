@@ -3,6 +3,7 @@ import { eq, and, or, like, gt, gte, inArray, desc, asc, sum, sql } from 'drizzl
 import { getDatabase, schema } from '../db';
 import { ErrorCode, AppError } from '../utils/errors';
 import { nowISO } from '../utils/date';
+import { logger } from '../utils/logger';
 import { AuditService } from './audit.service';
 import type {
   Product,
@@ -926,8 +927,8 @@ if (created && csvStock > 0) {
           errors: results.errors.length,
         },
       });
-    } catch {
-      // Ignore audit errors
+    } catch (err) {
+      logger.error({ err }, 'Bulk import audit log failed');
     }
 
     return results;

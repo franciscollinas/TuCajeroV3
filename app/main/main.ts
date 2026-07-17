@@ -2,7 +2,7 @@ import { app, BrowserWindow, session, dialog } from 'electron';
 import path from 'path';
 import { registerIpc } from './router/ipc-bridge';
 import { setupAutoUpdater } from './updater';
-import { getDatabase } from './db';
+import { getDatabase, closeDatabase } from './db';
 import { logger } from './utils/logger';
 
 const isDev = !app.isPackaged;
@@ -96,4 +96,8 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('before-quit', () => {
+  closeDatabase();
 });

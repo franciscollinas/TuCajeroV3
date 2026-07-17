@@ -59,7 +59,9 @@ export function resolveProcedurePath(caller: Record<string, unknown>, path: stri
     if (part === '__proto__' || part === 'constructor' || part === 'prototype') {
       throw new Error('Ruta inválida: segmento no permitido.');
     }
-    if (current == null || typeof current !== 'object') {
+    // In tRPC v11 the caller and sub-routers are functions, not plain objects.
+    // We must allow both 'object' and 'function' types when traversing segments.
+    if (current == null || (typeof current !== 'object' && typeof current !== 'function')) {
       throw new Error('Ruta inválida.');
     }
     current = (current as Record<string, unknown>)[part];

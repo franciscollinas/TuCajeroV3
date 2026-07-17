@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, LineChart, Line,
+  ResponsiveContainer, LineChart, Line, Cell,
 } from 'recharts';
 import { trpc } from '../../trpc';
 import { formatCurrency, formatDate, formatDateTime } from '../../shared/utils/formatters';
@@ -246,7 +246,11 @@ export default function ReportsPage(): JSX.Element {
                     <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                     <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }} formatter={(value: number) => [formatCurrency(value), 'Total']} />
-                    <Bar dataKey="total" fill="#6366f1" radius={[4, 4, 0, 0]} name="total" />
+                    <Bar dataKey="total" radius={[4, 4, 0, 0]} name="total">
+                    {summary.paymentMethods.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={['#6366f1', '#10b981', '#f59e0b'][index % 3]} />
+                    ))}
+                  </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>

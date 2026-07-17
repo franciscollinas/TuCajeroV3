@@ -79,13 +79,16 @@ export class ConfigService {
   }
 
   async getBusinessConfig(accountId: number): Promise<BusinessConfig> {
+    const db = getDatabase();
     const all = await this.getAll(accountId);
+    const account = await db.select().from(schema.accounts).where(eq(schema.accounts.id, accountId)).limit(1);
+    const accountName = account[0]?.name || '';
     return {
-      businessName: all.businessName || DEFAULTS.businessName,
-      address: all.address || DEFAULTS.address,
-      email: all.email || DEFAULTS.email,
-      phone: all.phone || DEFAULTS.phone,
-      nit: all.nit || DEFAULTS.nit,
+      businessName: all.businessName || accountName || DEFAULTS.businessName,
+      address: all.address || account[0]?.address || DEFAULTS.address,
+      email: all.email || account[0]?.email || DEFAULTS.email,
+      phone: all.phone || account[0]?.phone || DEFAULTS.phone,
+      nit: all.nit || account[0]?.nit || DEFAULTS.nit,
       logo: all.logo || DEFAULTS.logo,
       ivaRate: Number(all.ivaRate) || DEFAULTS.ivaRate,
     };

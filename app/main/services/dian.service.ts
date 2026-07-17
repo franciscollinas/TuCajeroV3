@@ -50,11 +50,9 @@ export interface FactusInvoiceRequest {
 }
 
 export class DianService {
-  private config: DianConfig | null = null;
-
   constructor() {}
 
-  private async loadConfig(accountId: number): Promise<void> {
+  private async loadConfig(accountId: number): Promise<DianConfig> {
     const db = getDatabase();
     const [account] = await db
       .select()
@@ -66,7 +64,7 @@ export class DianService {
       throw new AppError(ErrorCode.NOT_FOUND, 'Cuenta no encontrada');
     }
 
-    this.config = {
+    return {
       apiKey: process.env.FACTUS_API_KEY || '',
       accountId: process.env.FACTUS_ACCOUNT_ID || '',
       baseUrl: process.env.FACTUS_BASE_URL || 'https://api.factus.com.co',
@@ -76,7 +74,6 @@ export class DianService {
   }
 
   async validateSubscription(accountId: number): Promise<boolean> {
-    await this.loadConfig(accountId);
     const db = getDatabase();
     const [account] = await db
       .select({ subscriptionStatus: schema.accounts.subscriptionStatus, trialEndsAt: schema.accounts.trialEndsAt })
@@ -94,7 +91,7 @@ export class DianService {
   }
 
   async generateInvoice(sale: SaleRecord, accountId: number): Promise<DianInvoiceResponse> {
-    await this.loadConfig(accountId);
+    const config = await this.loadConfig(accountId);
 
     const hasValidSubscription = await this.validateSubscription(accountId);
     if (!hasValidSubscription) {
@@ -154,7 +151,7 @@ export class DianService {
     };
 
     // Call Factus API (placeholder implementation)
-    const response = await this.callFactusAPI(request);
+    const response = await this.callFactusAPI(request, config);
 
     // Store invoice record
     const now = nowISO();
@@ -185,11 +182,11 @@ export class DianService {
     return map[method] || '10';
   }
 
-  private async callFactusAPI(_request: FactusInvoiceRequest): Promise<DianInvoiceResponse> {
+  private async callFactusAPI(_request: FactusInvoiceRequest, config: DianConfig): Promise<DianInvoiceResponse> {
     // This is a placeholder - actual implementation would call Factus API
     // Example endpoint: POST https://api.factus.com.co/v1/invoices
     
-    if (!this.config?.apiKey) {
+    if (!config.apiKey) {
       throw new AppError(ErrorCode.VALIDATION, 'API Key de Factus no configurada');
     }
 

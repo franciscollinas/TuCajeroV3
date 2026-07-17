@@ -98,10 +98,10 @@ const adminOnly = authenticatedProcedure.use(requireRole('ADMIN'));
 const adminOrSupervisor = authenticatedProcedure.use(requireRole('ADMIN', 'SUPERVISOR'));
 
 function requireAccountId(ctx: { user: AuthUser }): number {
-  if (requireAccountId(ctx) == null) {
+  if (ctx.user.accountId == null) {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'La cuenta de usuario es requerida.' });
   }
-  return requireAccountId(ctx);
+  return ctx.user.accountId;
 }
 
 export const authRouter = t.router({

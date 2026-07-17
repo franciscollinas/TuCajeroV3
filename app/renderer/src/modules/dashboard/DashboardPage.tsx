@@ -220,93 +220,77 @@ export default function DashboardPage(): JSX.Element {
           </div>
         </div>
 
-        <div className="tc-metric">
+        <div className="tc-metric flex flex-col">
           <div className="flex items-center justify-between mb-3">
             <div className={`tc-metric-icon ${activeCash ? 'tc-metric-icon--green' : 'tc-metric-icon--slate'}`}>
               {activeCash ? <Unlock size={24} /> : <Lock size={24} />}
             </div>
+            {activeCash && (
+              <span className="text-xs text-gray-400 font-medium">
+                {formatDateTime(activeCash.openedAt).split(',')[1]?.trim() || formatDateTime(activeCash.openedAt)}
+              </span>
+            )}
           </div>
           <p className="tc-metric-label">{es.dashboard.cashControl}</p>
-          <div className="mt-1">
+          <div className="mt-2 flex-1 flex flex-col justify-end">
             {activeCash ? (
-              <>
-                <span className="tc-badge" style={{ background: '#ecfdf5', color: '#067647' }}>
-                  <Unlock size={12} />
-                  {es.cashSession.isOpen}
-                </span>
-                <p className="text-sm text-gray-400 mt-1">
-                  {es.cash.finalCash}: {formatCurrency(activeCash.initialCash)}
-                </p>
-              </>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="tc-badge" style={{ background: '#ecfdf5', color: '#067647' }}>
+                    <Unlock size={12} />
+                    {es.cashSession.isOpen}
+                  </span>
+                  <p className="text-sm font-bold text-gray-900 m-0">
+                    {formatCurrency(activeCash.initialCash)}
+                  </p>
+                </div>
+                
+                {showCloseInput ? (
+                  <div className="mt-2 flex flex-col gap-2 animate-slideDown">
+                    <div className="relative">
+                      <DollarSign size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input type="number" step="0.01" min="0" value={finalCash} onChange={(e) => setFinalCash(e.target.value)} placeholder={es.cash.finalCash} className="pl-7 pr-2 py-1.5 border border-gray-300 rounded-lg text-sm w-full focus:outline-none focus:ring-2 focus:ring-red-500" autoFocus />
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={handleCloseCash} disabled={cashLoading || !finalCash} className="flex-1 inline-flex justify-center items-center gap-1.5 px-2 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white text-xs font-semibold rounded-lg transition-colors">
+                        {cashLoading ? <LoadingSpinner size={14} /> : <Lock size={14} />}
+                        Cerrar
+                      </button>
+                      <button onClick={() => { setShowCloseInput(false); setFinalCash(''); }} className="px-3 py-1.5 text-xs font-semibold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => setShowCloseInput(true)} className="mt-1 w-full inline-flex justify-center items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-bold rounded-lg transition-colors">
+                    <Lock size={14} />
+                    {es.cashSession.close}
+                  </button>
+                )}
+              </div>
             ) : (
-              <span className="tc-badge" style={{ background: '#f2f4f7', color: '#475467' }}>
-                <Lock size={12} />
-                {es.dashboard.noSession}
-              </span>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="tc-badge" style={{ background: '#f2f4f7', color: '#475467' }}>
+                    <Lock size={12} />
+                    {es.dashboard.noSession}
+                  </span>
+                </div>
+                <div className="mt-2 flex flex-col gap-2">
+                  <div className="relative">
+                    <DollarSign size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input type="number" step="0.01" min="0" value={initialCash} onChange={(e) => setInitialCash(e.target.value)} placeholder={es.cashSession.openAmount} className="pl-7 pr-2 py-1.5 border border-gray-300 rounded-lg text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  <button onClick={handleOpenCash} disabled={cashLoading || !initialCash} className="w-full inline-flex justify-center items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-xs font-bold rounded-lg transition-colors">
+                    {cashLoading ? <LoadingSpinner size={14} /> : <Unlock size={14} />}
+                    {es.cashSession.open}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>
       </div>
-
-      {/* ── Cash Session Control ── */}
-      <Card>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 m-0">{es.dashboard.cashControl}</h3>
-            <p className="text-sm text-gray-500 mt-1 mb-0">{es.dashboard.fromHere}</p>
-          </div>
-        </div>
-        {activeCash ? (
-          <div className="space-y-4">
-            <div className="flex items-center gap-4 flex-wrap">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-                  <Unlock size={16} className="text-green-600" />
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">{es.dashboard.sessionActive}</p>
-                  <p className="text-sm font-semibold text-gray-800">{formatCurrency(activeCash.initialCash)}</p>
-                </div>
-              </div>
-              <div className="text-xs text-gray-400">
-                <Clock size={12} className="inline mr-1" />
-                {formatDateTime(activeCash.openedAt)}
-              </div>
-            </div>
-            {showCloseInput ? (
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="relative">
-                  <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input type="number" step="0.01" min="0" value={finalCash} onChange={(e) => setFinalCash(e.target.value)} placeholder={es.cash.finalCash} className="pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-40" />
-                </div>
-                <button onClick={handleCloseCash} disabled={cashLoading || !finalCash} className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white text-sm font-medium rounded-lg transition-colors">
-                  {cashLoading ? <LoadingSpinner size={16} /> : <Lock size={16} />}
-                  {es.cashSession.close}
-                </button>
-                <button onClick={() => { setShowCloseInput(false); setFinalCash(''); }} className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors">
-                  {es.common.cancel}
-                </button>
-              </div>
-            ) : (
-              <button onClick={() => setShowCloseInput(true)} className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors">
-                <Lock size={16} />
-                {es.cashSession.close}
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="relative">
-              <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input type="number" step="0.01" min="0" value={initialCash} onChange={(e) => setInitialCash(e.target.value)} placeholder={es.cashSession.openAmount} className="pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-40" />
-            </div>
-            <button onClick={handleOpenCash} disabled={cashLoading || !initialCash} className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-sm font-medium rounded-lg transition-colors">
-              {cashLoading ? <LoadingSpinner size={16} /> : <Unlock size={16} />}
-              {es.cashSession.open}
-            </button>
-          </div>
-        )}
-      </Card>
 
       {/* ── Charts Row 1 ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -429,7 +413,11 @@ export default function DashboardPage(): JSX.Element {
                 <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }} formatter={(value: number) => [formatCurrency(value), 'Total']} />
-                <Bar dataKey="total" fill="#6366f1" radius={[4, 4, 0, 0]} name="total" />
+                <Bar dataKey="total" radius={[4, 4, 0, 0]} name="total">
+                  {summary.paymentMethods.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>

@@ -2,6 +2,7 @@ appId: com.tucajero.pos
 productName: TuCajero
 directories:
   output: release
+  buildResources: build
 files:
   - dist/**/*
   - app/renderer/public/**/*
@@ -15,6 +16,7 @@ files:
   - '!**/*.map'
   - '!**/*.md'
   - '!**/tests/**/*'
+  - '!**/*.cjs'
 asar: true
 asarUnpack:
   - '**/*.node'
@@ -32,6 +34,7 @@ nsis:
   createDesktopShortcut: true
   shortcutName: TuCajero
   createStartMenuShortcut: true
+  deleteAppDataOnUninstall: false
 
 publish:
   provider: github
@@ -41,3 +44,9 @@ publish:
   private: false
 
 compression: maximum
+
+# Code signing configuration
+# To enable, obtain a code signing certificate and configure:
+# certificateFile: path/to/certificate.p12
+# certificatePassword: your-certificate-password
+# sign: null  # uncomment and set path to signtool.exe if needed

@@ -130,7 +130,7 @@ export default function UsersPage(): JSX.Element {
     if (toggleUserId === null || !user) return;
     setToggling(true);
     try {
-      const result = await trpc.users.toggleActive.mutate({ id: toggleUserId, active: toggleActive, actorUserId: user.id });
+      const result = await trpc.users.toggleActive.mutate({ id: toggleUserId, active: toggleActive });
       setUsers((prev) => prev.map((u) => (u.id === toggleUserId ? result as UserRecord : u)));
       setToggleUserId(null);
     } catch (err) {

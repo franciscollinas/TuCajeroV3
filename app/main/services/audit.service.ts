@@ -1,6 +1,7 @@
 import { getDatabase, schema } from '../db';
 import { nowISO } from '../utils/date';
 import { logger } from '../utils/logger';
+import { AppError, ErrorCode } from '../utils/errors';
 import { desc, eq, and, gte, lte } from 'drizzle-orm';
 
 export class AuditService {
@@ -11,18 +12,26 @@ export class AuditService {
     entityId?: number;
     payload: unknown;
   }): Promise<void> {
+    const db = getDatabase();
+    const entry = {
+      userId: input.userId,
+      action: input.action,
+      entity: input.entity,
+      entityId: input.entityId ?? null,
+      payload: JSON.stringify(input.payload ?? {}),
+      createdAt: nowISO(),
+    };
+
     try {
-      const db = getDatabase();
-      await db.insert(schema.auditLogs).values({
-        userId: input.userId,
-        action: input.action,
-        entity: input.entity,
-        entityId: input.entityId ?? null,
-        payload: JSON.stringify(input.payload ?? {}),
-        createdAt: nowISO(),
-      });
+      await db.insert(schema.auditLogs).values(entry).run();
     } catch (err) {
-      logger.error({ err }, 'Audit log failed');
+      logger.error({ err }, 'Audit log failed, retrying once');
+      try {
+        await db.insert(schema.auditLogs).values(entry).run();
+      } catch (retryErr) {
+        logger.error({ retryErr }, 'Audit log retry failed');
+        throw new AppError(ErrorCode.INTERNAL_ERROR, 'No se pudo registrar la operación en auditoría.');
+      }
     }
   }
 

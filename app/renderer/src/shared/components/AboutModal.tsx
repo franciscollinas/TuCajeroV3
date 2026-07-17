@@ -16,7 +16,7 @@ export const AboutModal = memo(function AboutModal({ open, onClose }: AboutModal
             <X size={16} />
           </button>
           <div className="w-20 h-20 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center mx-auto mb-4 border-2 border-white/25">
-            <span className="text-3xl font-black text-white">TC</span>
+            <img src="/isotipo.png" alt="TuCajero" className="w-14 h-14 object-contain" />
           </div>
           <h2 className="text-2xl font-extrabold m-0">TuCajero</h2>
           <p className="text-sm opacity-85 mt-1">Sistema Punto de Venta para Pequeños Negocios</p>

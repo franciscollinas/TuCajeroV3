@@ -4,6 +4,7 @@ import { User, Lock, Check, AlertTriangle } from 'lucide-react';
 
 import { useAuth } from '../../shared/context/AuthContext';
 import { es } from '../../shared/i18n';
+import { GrainOverlay } from '../../shared/components/GrainOverlay';
 
 export function LoginPage(): JSX.Element {
   const { login } = useAuth();
@@ -45,7 +46,7 @@ export function LoginPage(): JSX.Element {
         overflow: 'hidden',
       }}
     >
-      <div className="tc-grain-overlay" />
+      <GrainOverlay />
 
       {/* Decorative blobs */}
       <div style={{ position: 'absolute', top: '-10%', left: '-5%', width: 380, height: 380, background: 'var(--gradient-brand)', opacity: 0.12, borderRadius: '50%', filter: 'blur(20px)', pointerEvents: 'none' }} />

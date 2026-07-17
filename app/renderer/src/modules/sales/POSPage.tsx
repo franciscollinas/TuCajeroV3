@@ -123,6 +123,8 @@ export function POSPage(): JSX.Element {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error' | 'info'>('info');
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [businessConfig, setBusinessConfig] = useState<any>(null);
 
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
@@ -172,6 +174,7 @@ export function POSPage(): JSX.Element {
     setPaymentStep('options');
     setSelectedMethod(null);
     setShowCheckoutModal(false);
+    setModalError(null);
   };
 
   // Barcode scanner integration
@@ -210,9 +213,10 @@ export function POSPage(): JSX.Element {
       try {
         setCashLoadError(null);
 
-        const [cashResult, productsResult] = await Promise.all([
+        const [cashResult, productsResult, configResult] = await Promise.all([
           trpc.cash.getActive.query({ userId: user.id }),
           trpc.inventory.getAll.query({}),
+          trpc.config.getBusiness.query(),
         ]);
 
         if (cancelled) return;
@@ -228,6 +232,10 @@ export function POSPage(): JSX.Element {
         const productsData = productsResult as { products: Product[]; total: number };
         if (productsData?.products) {
           setProducts(productsData.products.filter((p) => p.isActive));
+        }
+
+        if (configResult) {
+          setBusinessConfig(configResult);
         }
       } catch {
         if (!cancelled) setCashLoadError('Error de conexión al cargar datos');
@@ -304,12 +312,17 @@ export function POSPage(): JSX.Element {
     [cart],
   );
 
+  const globalIvaRate = businessConfig?.ivaRate != null ? businessConfig.ivaRate / 100 : 0.19;
+
   const tax = useMemo(
-    () => cart.reduce((sum, item) => {
-      const rate = item.product.taxRate ?? 0.19;
-      return sum + (item.quantity * item.unitPrice - item.discount) * rate;
-    }, 0),
-    [cart],
+    () => {
+      if (globalIvaRate === 0) return 0;
+      return cart.reduce((sum, item) => {
+        const rate = item.product.taxRate ?? globalIvaRate;
+        return sum + (item.quantity * item.unitPrice - item.discount) * rate;
+      }, 0);
+    },
+    [cart, globalIvaRate],
   );
 
   const calculatedDiscount = useMemo(
@@ -457,8 +470,7 @@ export function POSPage(): JSX.Element {
       clearCart();
       void refreshProducts();
     } catch (err) {
-      setMessageType('error');
-      setMessage(err instanceof Error ? err.message : 'Error al procesar');
+      setModalError(err instanceof Error ? err.message : 'Error al procesar');
     } finally {
       setLoading(false);
     }
@@ -495,8 +507,7 @@ export function POSPage(): JSX.Element {
       clearCart();
       void refreshProducts();
     } catch (err) {
-      setMessageType('error');
-      setMessage(err instanceof Error ? err.message : 'Error al procesar');
+      setModalError(err instanceof Error ? err.message : 'Error al procesar');
     } finally {
       setLoading(false);
     }
@@ -789,7 +800,7 @@ export function POSPage(): JSX.Element {
                 </div>
                 <div style={{ position: 'relative', display: 'flex', gap: 'var(--space-1)' }}>
                   {discountType === 'percentage' ? <Percent style={{ position: 'absolute', left: 'var(--space-2)', top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', pointerEvents: 'none' }} size={12} /> : <DollarSign style={{ position: 'absolute', left: 'var(--space-2)', top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', pointerEvents: 'none' }} size={12} />}
-                  <input type="number" placeholder={discountType === 'percentage' ? '%' : '$'} value={globalDiscount || ''} onChange={(e) => setGlobalDiscount(Number(e.target.value))} className="tc-input" style={{ paddingLeft: '28px', minHeight: '34px', fontSize: 'var(--text-xs)', background: '#fff', width: '70px' }} aria-label="Descuento" />
+                  <input type="number" placeholder="Descuento" value={globalDiscount || ''} onChange={(e) => setGlobalDiscount(Number(e.target.value))} className="tc-input" style={{ paddingLeft: '28px', minHeight: '34px', fontSize: 'var(--text-xs)', background: '#fff', width: '70px' }} aria-label="Descuento" />
                   <button type="button" onClick={() => setDiscountType(discountType === 'percentage' ? 'fixed' : 'percentage')} aria-label={`Cambiar tipo de descuento: ${discountType === 'percentage' ? 'porcentaje' : 'fijo'}`} style={{ minHeight: '34px', padding: '0 var(--space-2)', border: '1px solid var(--gray-300)', borderRadius: 'var(--radius-md)', background: 'var(--gray-100)', cursor: 'pointer', fontSize: 'var(--text-xs)', fontWeight: 600 }}>
                     {discountType === 'percentage' ? '%' : '$'}
                   </button>
@@ -798,7 +809,7 @@ export function POSPage(): JSX.Element {
 
               {/* Cobrar Button */}
               <button
-                onClick={() => { setShowCheckoutModal(true); setPaymentStep('options'); setPayments([]); setCashReceived(0); setMixtoCashAmount(0); }}
+                onClick={() => { setShowCheckoutModal(true); setPaymentStep('options'); setPayments([]); setCashReceived(0); setMixtoCashAmount(0); setModalError(null); }}
                 disabled={cart.length === 0 || showCheckoutModal}
                 aria-label={`Cobrar ${formatCurrency(total)}`}
                 style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-3)', padding: 'var(--space-4)', borderRadius: 'var(--radius-xl)', background: cart.length > 0 && !showCheckoutModal ? 'linear-gradient(135deg, var(--success-600) 0%, var(--success-500) 100%)' : 'var(--gray-300)', border: 'none', color: '#fff', fontWeight: 800, fontSize: 'var(--text-lg)', cursor: cart.length === 0 || showCheckoutModal ? 'not-allowed' : 'pointer', opacity: cart.length === 0 || showCheckoutModal ? 0.5 : 1, transition: 'all var(--transition-fast)', boxShadow: cart.length > 0 && !showCheckoutModal ? '0 4px 16px rgba(18, 183, 106, 0.5)' : 'none', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 'var(--space-2)', minHeight: '56px' }}
@@ -820,7 +831,7 @@ export function POSPage(): JSX.Element {
       {/* CHECKOUT MODAL */}
       {showCheckoutModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0, 0, 0, 0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
-          onClick={(e) => { if (e.target === e.currentTarget) { setShowCheckoutModal(false); setPayments([]); setPaymentStep('options'); setCashReceived(0); setMixtoCashAmount(0); } }}>
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowCheckoutModal(false); setPayments([]); setPaymentStep('options'); setCashReceived(0); setMixtoCashAmount(0); setModalError(null); } }}>
           <div style={{ background: 'var(--gray-50)', borderRadius: 'var(--radius-2xl)', width: '95vw', maxWidth: '900px', maxHeight: '90vh', overflow: 'auto', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
             {/* Modal Header */}
             <div style={{ padding: 'var(--space-4)', background: 'linear-gradient(135deg, var(--brand-600) 0%, var(--brand-500) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -828,10 +839,22 @@ export function POSPage(): JSX.Element {
                 <Banknote size={28} />
                 Cobro - Total: {formatCurrency(total)}
               </h2>
-              <button onClick={() => { setShowCheckoutModal(false); setPayments([]); setPaymentStep('options'); setCashReceived(0); setMixtoCashAmount(0); }} style={{ width: '40px', height: '40px', borderRadius: 'var(--radius-lg)', background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <button onClick={() => { setShowCheckoutModal(false); setPayments([]); setPaymentStep('options'); setCashReceived(0); setMixtoCashAmount(0); setModalError(null); }} style={{ width: '40px', height: '40px', borderRadius: 'var(--radius-lg)', background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <X size={20} />
               </button>
             </div>
+
+            {modalError && (
+              <div style={{ margin: 'var(--space-4) var(--space-4) 0', padding: 'var(--space-3)', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 'var(--radius-md)', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'space-between', animation: 'slideDown 0.3s ease' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                  <AlertCircle size={18} />
+                  <span style={{ fontWeight: 600 }}>{modalError}</span>
+                </div>
+                <button onClick={() => setModalError(null)} style={{ background: 'transparent', border: 'none', color: '#dc2626', cursor: 'pointer' }}>
+                  <X size={16} />
+                </button>
+              </div>
+            )}
 
             {/* Modal Body */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', padding: 'var(--space-4)' }}>

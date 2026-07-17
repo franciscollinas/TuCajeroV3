@@ -15,6 +15,7 @@ export enum ErrorCode {
   SESSION_EXPIRED = 'SESSION_EXPIRED',
   ACCOUNT_LOCKED = 'ACCOUNT_LOCKED',
   TOO_MANY_ATTEMPTS = 'TOO_MANY_ATTEMPTS',
+  INTERNAL_ERROR = 'INTERNAL_ERROR',
 }
 
 export class AppError extends Error {

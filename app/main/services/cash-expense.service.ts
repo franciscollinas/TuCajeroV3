@@ -37,6 +37,7 @@ export class CashExpenseService {
     const [expense] = await db
       .insert(schema.cashExpenses)
       .values({
+        accountId,
         cashSessionId: sessionId,
         userId,
         amount,
