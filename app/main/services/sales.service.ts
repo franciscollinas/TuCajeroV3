@@ -4,6 +4,7 @@ import { getDatabase, schema } from '../db';
 import { AppError, ErrorCode } from '../utils/errors';
 import { nowISO } from '../utils/date';
 import { AuditService } from './audit.service';
+import { ConfigService } from './config.service';
 import type {
   SaleRecord,
   CartItemInput,
@@ -135,20 +136,24 @@ export class SalesService {
 
     const productMap = new Map(productRows.map((p) => [p.id, p]));
 
+    const configService = new ConfigService();
+    const businessConfig = await configService.getBusinessConfig(accountId);
+    const ivaEnabled = businessConfig.ivaEnabled;
+
     let subtotal = 0;
     let tax = 0;
-    const defaultTaxRate = 0.19;
 
     for (const item of items) {
       const product = productMap.get(item.productId);
       if (!product) {
         throw new AppError(ErrorCode.PRODUCT_NOT_FOUND, `Producto ${item.productId} no encontrado.`);
       }
-      const rate = product.taxRate ?? defaultTaxRate;
       const lineSubtotal = item.quantity * item.unitPrice;
       const lineNet = lineSubtotal - item.discount;
       subtotal += lineNet;
-      tax += lineNet * rate;
+      if (ivaEnabled) {
+        tax += lineNet * (product.taxRate || 0);
+      }
     }
 
     const finalDiscount = discountType === 'percentage' ? (subtotal * discount) / 100 : discount;
@@ -225,7 +230,7 @@ export class SalesService {
               productId: item.productId,
               quantity: item.quantity,
               unitPrice: item.unitPrice,
-              taxRate: product.taxRate ?? defaultTaxRate,
+              taxRate: ivaEnabled ? (product.taxRate || 0) : 0,
               subtotal: lineSubtotal,
               discount: item.discount,
               total: lineSubtotal - item.discount,

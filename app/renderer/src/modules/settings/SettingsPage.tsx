@@ -13,7 +13,7 @@ interface BusinessInfo {
   phone: string;
   nit: string;
   logo: string;
-  ivaRate: number;
+  ivaEnabled: boolean;
 }
 
 export default function SettingsPage(): JSX.Element {
@@ -24,7 +24,7 @@ export default function SettingsPage(): JSX.Element {
     phone: '',
     nit: '',
     logo: '',
-    ivaRate: 19,
+    ivaEnabled: false,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -45,7 +45,7 @@ export default function SettingsPage(): JSX.Element {
             phone: data.phone ?? '',
             nit: data.nit ?? '',
             logo: data.logo ?? '',
-            ivaRate: data.ivaRate ?? 19,
+            ivaEnabled: data.ivaEnabled ?? false,
           });
         }
       } catch {
@@ -174,17 +174,24 @@ export default function SettingsPage(): JSX.Element {
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-2">
                 <Percent size={14} className="text-gray-400" />
-                IVA (%) 
+                IVA
               </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                max="100"
-                value={form.ivaRate}
-                onChange={(e) => setForm((prev) => ({ ...prev, ivaRate: Number(e.target.value) }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              />
+              <button
+                type="button"
+                onClick={() => setForm((prev) => ({ ...prev, ivaEnabled: !prev.ivaEnabled }))}
+                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+                  form.ivaEnabled ? 'bg-indigo-600' : 'bg-gray-300'
+                }`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                    form.ivaEnabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+              <span className="ml-2 text-sm text-gray-500">
+                {form.ivaEnabled ? 'Habilitado' : 'Deshabilitado'}
+              </span>
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-2">

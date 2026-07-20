@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { trpc } from '../../trpc';
 import { useAuth } from '../../shared/context/AuthContext';
+import { useConfig } from '../../shared/context/ConfigContext';
 import { formatCurrency, formatDate } from '../../shared/utils/formatters';
 import { es } from '../../shared/i18n';
 import {
@@ -31,6 +32,7 @@ type ProductFormData = {
   stock: string;
   minStock: string;
   criticalStock: string;
+  taxRate: string;
   expiryDate: string;
   location: string;
   unitType: string;
@@ -48,6 +50,7 @@ const emptyForm: ProductFormData = {
   stock: '',
   minStock: '',
   criticalStock: '',
+  taxRate: '0',
   expiryDate: '',
   location: '',
   unitType: 'unidad',
@@ -68,6 +71,7 @@ function getStockLabel(stock: number, minStock: number, criticalStock: number): 
 
 export default function InventoryPage(): JSX.Element {
   const { user } = useAuth();
+  const { config } = useConfig();
   const navigate = useNavigate();
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -156,6 +160,7 @@ export default function InventoryPage(): JSX.Element {
         stock: String(product.stock),
         minStock: String(product.minStock),
         criticalStock: String(product.criticalStock),
+        taxRate: String(product.taxRate ?? 0),
         expiryDate: product.expiryDate ?? '',
         location: product.location ?? '',
         unitType: product.unitType,
@@ -183,6 +188,7 @@ export default function InventoryPage(): JSX.Element {
         stock: Number(formData.stock),
         minStock: Number(formData.minStock) || 0,
         criticalStock: Number(formData.criticalStock) || 0,
+        taxRate: Number(formData.taxRate) || 0,
         expiryDate: formData.expiryDate || null,
         location: formData.location.trim() || null,
         unitType: formData.unitType || 'unidad',
@@ -659,6 +665,20 @@ export default function InventoryPage(): JSX.Element {
               onChange={(e) => setFormData({ ...formData, cost: e.target.value })}
               className="tc-input"
               required
+            />
+          </div>
+          <div className="tc-field">
+            <label className="tc-label">IVA (%)</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              value={formData.taxRate}
+              onChange={(e) => setFormData({ ...formData, taxRate: e.target.value })}
+              className="tc-input"
+              disabled={!config?.ivaEnabled}
+              placeholder={config?.ivaEnabled ? 'Ej: 19' : 'IVA deshabilitado'}
             />
           </div>
           <div className="tc-field">

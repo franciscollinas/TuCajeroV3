@@ -68,7 +68,6 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md', c
       role="dialog"
       aria-modal="true"
       aria-label={title || 'Diálogo'}
-      onClick={onClose}
     >
       <div
         ref={modalRef}

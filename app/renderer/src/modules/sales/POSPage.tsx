@@ -312,17 +312,16 @@ export function POSPage(): JSX.Element {
     [cart],
   );
 
-  const globalIvaRate = businessConfig?.ivaRate != null ? businessConfig.ivaRate / 100 : 0.19;
+  const ivaEnabled = businessConfig?.ivaEnabled ?? false;
 
   const tax = useMemo(
     () => {
-      if (globalIvaRate === 0) return 0;
+      if (!ivaEnabled) return 0;
       return cart.reduce((sum, item) => {
-        const rate = item.product.taxRate ?? globalIvaRate;
-        return sum + (item.quantity * item.unitPrice - item.discount) * rate;
+        return sum + (item.quantity * item.unitPrice - item.discount) * (item.product.taxRate || 0);
       }, 0);
     },
-    [cart, globalIvaRate],
+    [cart, ivaEnabled],
   );
 
   const calculatedDiscount = useMemo(

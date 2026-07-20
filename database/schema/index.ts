@@ -132,7 +132,7 @@ export const products = sqliteTable('Product', {
   stock: real('stock').notNull().default(0),
   minStock: integer('minStock').notNull().default(5),
   criticalStock: integer('criticalStock').notNull().default(2),
-  taxRate: real('taxRate').notNull().default(0.19),
+  taxRate: real('taxRate').notNull().default(0),
   suggestedPurchaseQty: integer('suggestedPurchaseQty'),
   expiryDate: text('expiryDate'),
   location: text('location'),

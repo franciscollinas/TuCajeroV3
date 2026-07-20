@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { trpc } from '../../trpc';
+import { useAuth } from './AuthContext';
 
 interface BusinessConfig {
   businessName: string;
@@ -8,7 +9,7 @@ interface BusinessConfig {
   phone: string;
   nit: string;
   logo: string;
-  ivaRate: number;
+  ivaEnabled: boolean;
 }
 
 interface ConfigContextType {
@@ -26,6 +27,7 @@ const ConfigContext = createContext<ConfigContextType>({
 export function ConfigProvider({ children }: { children: ReactNode }): JSX.Element {
   const [config, setConfig] = useState<BusinessConfig | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const { user, isReady } = useAuth();
 
   const refresh = async () => {
     try {
@@ -37,7 +39,14 @@ export function ConfigProvider({ children }: { children: ReactNode }): JSX.Eleme
     setLoaded(true);
   };
 
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    if (isReady && user) {
+      refresh();
+    } else if (isReady && !user) {
+      setConfig(null);
+      setLoaded(true);
+    }
+  }, [isReady, user]);
 
   return (
     <ConfigContext.Provider value={{ config, loaded, refresh }}>

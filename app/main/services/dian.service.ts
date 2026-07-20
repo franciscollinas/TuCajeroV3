@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { getDatabase, schema } from '../db';
 import { AppError, ErrorCode } from '../utils/errors';
 import { nowISO } from '../utils/date';
+import { ConfigService } from './config.service';
 import type { SaleRecord } from '../../renderer/src/shared/types/sales.types';
 
 export interface DianConfig {
@@ -124,16 +125,23 @@ export class DianService {
     }
 
     // Build items for Factus API
-    const items: FactusInvoiceItem[] = sale.items.map((item: { product: { code: string; name: string }; quantity: number; unitPrice: number; taxRate?: number; discount?: number }) => ({
-      code_reference: item.product.code,
-      name: item.product.name,
-      quantity: item.quantity,
-      price: item.unitPrice,
-      tax_rate: String(item.taxRate || 0.19),
-      tax_category: '01', // Gravado - IVA
-      discount: item.discount ?? 0,
-      type_unit: 94, // Unidad estándar
-    }));
+    const configService = new ConfigService();
+    const businessConfig = await configService.getBusinessConfig(accountId);
+    const ivaEnabled = businessConfig.ivaEnabled;
+
+    const items: FactusInvoiceItem[] = sale.items.map((item: { product: { code: string; name: string }; quantity: number; unitPrice: number; taxRate?: number; discount?: number }) => {
+      const itemTaxRate = ivaEnabled ? (item.taxRate || 0) : 0;
+      return {
+        code_reference: item.product.code,
+        name: item.product.name,
+        quantity: item.quantity,
+        price: item.unitPrice,
+        tax_rate: String(itemTaxRate),
+        tax_category: itemTaxRate > 0 ? '01' : '02',
+        discount: item.discount ?? 0,
+        type_unit: 94,
+      };
+    });
 
     const request: FactusInvoiceRequest = {
       reference: sale.saleNumber,

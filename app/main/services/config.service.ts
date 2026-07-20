@@ -10,7 +10,7 @@ export type BusinessConfig = {
   phone: string;
   nit: string;
   logo: string;
-  ivaRate: number;
+  ivaEnabled: boolean;
 };
 
 const DEFAULTS: BusinessConfig = {
@@ -20,7 +20,7 @@ const DEFAULTS: BusinessConfig = {
   phone: '',
   nit: '',
   logo: '',
-  ivaRate: 19,
+  ivaEnabled: false,
 };
 
 const SENSITIVE_CONFIG_KEYS = ['license_data', 'printer_config'];
@@ -90,7 +90,7 @@ export class ConfigService {
       phone: all.phone || account[0]?.phone || DEFAULTS.phone,
       nit: all.nit || account[0]?.nit || DEFAULTS.nit,
       logo: all.logo || DEFAULTS.logo,
-      ivaRate: Number(all.ivaRate) || DEFAULTS.ivaRate,
+      ivaEnabled: all.ivaEnabled === 'true',
     };
   }
 

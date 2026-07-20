@@ -166,13 +166,13 @@ export const inventoryRouter = t.router({
   }),
 
   create: authenticatedProcedure
-    .input(z.object({ data: z.object({ code: z.string(), barcode: z.string().optional().nullable(), name: z.string(), description: z.string().optional().nullable(), categoryName: z.string().optional(), price: z.number(), cost: z.number(), stock: z.number(), minStock: z.number().optional(), criticalStock: z.number().optional(), expiryDate: z.string().optional().nullable(), location: z.string().optional().nullable(), unitType: z.string().optional(), conversionFactor: z.number().optional(), userId: z.number() }) }))
+    .input(z.object({ data: z.object({ code: z.string(), barcode: z.string().optional().nullable(), name: z.string(), description: z.string().optional().nullable(), categoryName: z.string().optional(), price: z.number(), cost: z.number(), stock: z.number(), minStock: z.number().optional(), criticalStock: z.number().optional(), taxRate: z.number().optional(), expiryDate: z.string().optional().nullable(), location: z.string().optional().nullable(), unitType: z.string().optional(), conversionFactor: z.number().optional(), userId: z.number() }) }))
     .mutation(async ({ input, ctx }) => {
       return inventoryService.createProduct(input.data, requireAccountId(ctx));
     }),
 
   update: authenticatedProcedure
-    .input(z.object({ id: z.number(), data: z.object({ name: z.string().optional(), price: z.number().optional(), cost: z.number().optional(), categoryName: z.string().optional(), minStock: z.number().optional(), criticalStock: z.number().optional(), expiryDate: z.string().optional().nullable(), location: z.string().optional().nullable() }) }))
+    .input(z.object({ id: z.number(), data: z.object({ name: z.string().optional(), price: z.number().optional(), cost: z.number().optional(), categoryName: z.string().optional(), minStock: z.number().optional(), criticalStock: z.number().optional(), taxRate: z.number().optional(), expiryDate: z.string().optional().nullable(), location: z.string().optional().nullable() }) }))
     .mutation(async ({ input, ctx }) => {
       return inventoryService.updateProduct(input.id, input.data, requireAccountId(ctx));
     }),
@@ -242,7 +242,7 @@ export const cashRouter = t.router({
   listClosures: authenticatedProcedure
     .input(z.object({ branchId: z.number().optional() }).optional())
     .query(async ({ input, ctx }) => {
-      return cashSessionService.listCashClosures(60, input?.branchId, requireAccountId(ctx));
+      return cashSessionService.listCashClosures(requireAccountId(ctx), 60, input?.branchId);
     }),
 
   getTodayPaymentsByMethod: authenticatedProcedure
@@ -406,7 +406,7 @@ export const configRouter = t.router({
   }),
 
   setBusiness: adminOnly
-    .input(z.object({ config: z.object({ businessName: z.string(), address: z.string(), email: z.string(), phone: z.string(), nit: z.string(), logo: z.string(), ivaRate: z.number() }) }))
+    .input(z.object({ config: z.object({ businessName: z.string(), address: z.string(), email: z.string(), phone: z.string(), nit: z.string(), logo: z.string(), ivaEnabled: z.boolean() }) }))
     .mutation(async ({ input, ctx }) => {
       return configService.setBusinessConfig(input.config, requireAccountId(ctx));
     }),

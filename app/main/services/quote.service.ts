@@ -4,6 +4,7 @@ import { AppError, ErrorCode } from '../utils/errors';
 import { nowISO } from '../utils/date';
 import { AuditService } from './audit.service';
 import { SalesService } from './sales.service';
+import { ConfigService } from './config.service';
 import type { SaleRecord, SaleItem, CartItemInput } from '../../renderer/src/shared/types/sales.types';
 
 const auditService = new AuditService();
@@ -224,6 +225,10 @@ export class QuoteService {
     const now = nowISO();
     const saleNumber = await buildQuoteNumber();
 
+    const configService = new ConfigService();
+    const businessConfig = await configService.getBusinessConfig(accountId);
+    const ivaEnabled = businessConfig.ivaEnabled;
+
     let subtotal = 0;
     let tax = 0;
 
@@ -238,7 +243,7 @@ export class QuoteService {
         if (!product) throw new AppError(ErrorCode.NOT_FOUND, `Producto #${item.productId} no encontrado`);
 
         const lineSubtotal = item.unitPrice * item.quantity;
-        const lineTax = lineSubtotal * product.taxRate;
+        const lineTax = ivaEnabled ? lineSubtotal * (product.taxRate || 0) : 0;
         const lineTotal = lineSubtotal - (item.discount ?? 0);
 
         subtotal += lineSubtotal;
@@ -248,7 +253,7 @@ export class QuoteService {
           productId: item.productId,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
-          taxRate: product.taxRate,
+          taxRate: ivaEnabled ? (product.taxRate || 0) : 0,
           subtotal: lineSubtotal,
           discount: item.discount ?? 0,
           total: lineTotal,
@@ -319,6 +324,10 @@ export class QuoteService {
       throw new AppError(ErrorCode.EMPTY_CART, 'La cotización debe tener al menos un producto.');
     }
 
+    const configService = new ConfigService();
+    const businessConfig = await configService.getBusinessConfig(accountId);
+    const ivaEnabled = businessConfig.ivaEnabled;
+
     let subtotal = 0;
     let tax = 0;
 
@@ -333,7 +342,7 @@ export class QuoteService {
         if (!product) throw new AppError(ErrorCode.NOT_FOUND, `Producto #${item.productId} no encontrado`);
 
         const lineSubtotal = item.unitPrice * item.quantity;
-        const lineTax = lineSubtotal * product.taxRate;
+        const lineTax = ivaEnabled ? lineSubtotal * (product.taxRate || 0) : 0;
         const lineTotal = lineSubtotal - (item.discount ?? 0);
 
         subtotal += lineSubtotal;
@@ -343,7 +352,7 @@ export class QuoteService {
           productId: item.productId,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
-          taxRate: product.taxRate,
+          taxRate: ivaEnabled ? (product.taxRate || 0) : 0,
           subtotal: lineSubtotal,
           discount: item.discount ?? 0,
           total: lineTotal,

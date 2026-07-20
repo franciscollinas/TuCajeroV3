@@ -80,8 +80,8 @@ export const useCashStore = create<CashState>((set, get) => ({
   closeCash: async (id, finalCash, _userId) => {
     const currentSession = get().session;
     const expectedCash = currentSession ? (currentSession.expectedCash ?? currentSession.initialCash) : finalCash;
-    const result = await trpc.cash.close.mutate({ sessionId: id, finalCash, expectedCash });
-    set({ session: result as CashRegister });
+    await trpc.cash.close.mutate({ sessionId: id, finalCash, expectedCash });
+    get().clearSession();
   },
 
   addExpense: async (sessionId, userId, amount, reason) => {

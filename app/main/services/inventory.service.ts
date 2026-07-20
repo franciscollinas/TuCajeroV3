@@ -496,7 +496,7 @@ export class InventoryService {
         stock: data.stock,
         minStock: data.minStock ?? 5,
         criticalStock: data.criticalStock ?? 2,
-        taxRate: data.taxRate ?? 0.19,
+        taxRate: data.taxRate ?? 0,
         suggestedPurchaseQty: data.suggestedPurchaseQty ?? null,
         expiryDate: data.expiryDate ?? null,
         location: data.location ?? null,
