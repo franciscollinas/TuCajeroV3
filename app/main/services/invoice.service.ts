@@ -5,8 +5,9 @@ import { getDatabase, schema } from '../db';
 import { eq } from 'drizzle-orm';
 import { ConfigService } from './config.service';
 import { AppError, ErrorCode } from '../utils/errors';
+import { getInvoicesDir } from '../utils/paths';
 
-const INVOICES_DIR = join(process.cwd(), 'invoices');
+const INVOICES_DIR = getInvoicesDir();
 
 export class InvoiceService {
   private configService = new ConfigService();
@@ -60,7 +61,7 @@ export class InvoiceService {
     });
 
     const buffers: Buffer[] = [];
-    await new Promise<void>(async (resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       doc.on('data', (chunk: Buffer) => buffers.push(chunk));
       doc.on('end', () => {
         try {
@@ -71,6 +72,8 @@ export class InvoiceService {
         }
       });
       doc.on('error', reject);
+
+      void (async () => {
 
       // Colors
       const brandColor = '#465fff';
@@ -192,6 +195,7 @@ export class InvoiceService {
     );
 
     doc.end();
+      })().catch(reject);
     });
 
     return { path: filePath, fileName };

@@ -1,4 +1,4 @@
-﻿import { eq, and, gte, lte, desc, sum, inArray, like } from 'drizzle-orm';
+﻿import { eq, and, gte, lt, lte, desc, sum, count, countDistinct, inArray, like, sql } from 'drizzle-orm';
 
 import { getDatabase, schema } from '../db';
 import { AppError, ErrorCode } from '../utils/errors';
@@ -89,7 +89,7 @@ export class SalesService {
     discountType: 'percentage' | 'fixed' = 'percentage',
   ): Promise<SaleRecord> {
     if (items.length === 0) {
-      throw new AppError(ErrorCode.EMPTY_CART, 'El carrito estÃ¡ vacÃ­o.');
+      throw new AppError(ErrorCode.EMPTY_CART, 'El carrito está vacío.');
     }
 
     if (payments.length === 0 && !isCreditSale) {
@@ -97,13 +97,13 @@ export class SalesService {
     }
 
     if (isCreditSale && !customerId) {
-      throw new AppError(ErrorCode.VALIDATION, 'Se requiere seleccionar un cliente para ventas a crÃ©dito.');
+      throw new AppError(ErrorCode.VALIDATION, 'Se requiere seleccionar un cliente para ventas a crédito.');
     }
 
     const db = getDatabase();
 
     const [cashSession] = await db
-      .select({ id: schema.cashSessions.id, status: schema.cashSessions.status, initialCash: schema.cashSessions.initialCash, expectedCash: schema.cashSessions.expectedCash, branchId: schema.cashSessions.branchId, accountId: schema.cashSessions.accountId })
+      .select({ id: schema.cashSessions.id, userId: schema.cashSessions.userId, status: schema.cashSessions.status, initialCash: schema.cashSessions.initialCash, expectedCash: schema.cashSessions.expectedCash, branchId: schema.cashSessions.branchId, accountId: schema.cashSessions.accountId })
       .from(schema.cashSessions)
       .where(eq(schema.cashSessions.id, cashSessionId))
       .limit(1);
@@ -114,6 +114,18 @@ export class SalesService {
 
     if (cashSession.accountId !== accountId) {
       throw new AppError(ErrorCode.FORBIDDEN, 'La sesion de caja no pertenece a tu cuenta.');
+    }
+    if (cashSession.userId !== userId) {
+      throw new AppError(ErrorCode.FORBIDDEN, 'No puedes registrar ventas en la caja de otro usuario.');
+    }
+
+    if (branchId) {
+      const [branch] = await db
+        .select({ id: schema.branches.id })
+        .from(schema.branches)
+        .where(and(eq(schema.branches.id, branchId), eq(schema.branches.accountId, accountId), eq(schema.branches.isActive, true)))
+        .limit(1);
+      if (!branch) throw new AppError(ErrorCode.FORBIDDEN, 'La sucursal no pertenece a tu cuenta o está inactiva.');
     }
 
     const productRows = await db
@@ -131,7 +143,7 @@ export class SalesService {
         categoryName: schema.categories.name,
       })
       .from(schema.products)
-      .innerJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
+      .leftJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
       .where(and(inArray(schema.products.id, items.map((i) => i.productId)), eq(schema.products.accountId, accountId)));
 
     const productMap = new Map(productRows.map((p) => [p.id, p]));
@@ -159,9 +171,13 @@ export class SalesService {
     const finalDiscount = discountType === 'percentage' ? (subtotal * discount) / 100 : discount;
     const total = subtotal + tax + deliveryFee - finalDiscount;
 
-    const effectivePayments = isCreditSale && customerId
-      ? [...payments, { method: 'credito' as const, amount: total }]
-      : payments;
+    const paidPayments = payments.filter((p) => p.method !== 'credito');
+    const paidTotal = paidPayments.reduce((sum, p) => sum + p.amount, 0);
+    const creditRemainder = isCreditSale && customerId ? Math.max(0, total - paidTotal) : 0;
+
+    const effectivePayments = creditRemainder > 0.01
+      ? [...paidPayments, { method: 'credito' as const, amount: creditRemainder }]
+      : paidPayments;
 
     const totalPaid = effectivePayments.reduce((sum, p) => sum + p.amount, 0);
     const change = totalPaid > total ? totalPaid - total : 0;
@@ -173,7 +189,7 @@ export class SalesService {
       );
     }
 
-    const saleNumber = await buildSaleNumber();
+    let saleNumber = await buildSaleNumber();
     const now = nowISO();
 
     let createdSale: (typeof schema.sales.$inferSelect) | undefined;
@@ -250,33 +266,43 @@ export class SalesService {
           }
 
           if ((creditPayment || isCreditSale) && customerId) {
-            tx.insert(schema.debts).values({
-              customerId,
-              accountId,
-              saleId: created.id,
-              amount: total,
-              balance: total,
-              status: 'PENDING',
-              createdAt: now,
-              updatedAt: now,
-            }).run();
+            const debtAmount = Math.max(0, total - paidTotal);
+            if (debtAmount > 0.01) {
+              tx.insert(schema.debts).values({
+                customerId,
+                accountId,
+                saleId: created.id,
+                amount: debtAmount,
+                balance: debtAmount,
+                status: 'PENDING',
+                createdAt: now,
+                updatedAt: now,
+              }).run();
+            }
           }
 
           for (const item of items) {
             const product = productMap.get(item.productId)!;
-            const newStock = product.stock - item.quantity;
 
-            tx.update(schema.products)
-              .set({ stock: newStock, updatedAt: now })
-              .where(eq(schema.products.id, item.productId))
-              .run();
+            const updated = tx.update(schema.products)
+              .set({ stock: sql`${schema.products.stock} - ${item.quantity}`, updatedAt: now })
+              .where(and(eq(schema.products.id, item.productId), gte(schema.products.stock, item.quantity)))
+              .returning({ stock: schema.products.stock })
+              .get();
+
+            if (!updated) {
+              throw new AppError(ErrorCode.INSUFFICIENT_STOCK, `Stock insuficiente para ${product.name}. Disponible: ${product.stock}.`);
+            }
+
+            const newStock = updated.stock;
+            const previousStock = newStock + item.quantity;
 
             tx.insert(schema.stockMovements).values({
               accountId,
               productId: item.productId,
               type: 'venta',
               quantity: item.quantity,
-              previousStock: product.stock,
+              previousStock,
               newStock,
               reason: `Venta ${saleNumber}`,
               userId,
@@ -291,7 +317,13 @@ export class SalesService {
 
           if (cashPayment > 0) {
             const netCashIncrease = cashPayment - change;
-            const currentExpected = cashSession.expectedCash ?? cashSession.initialCash;
+            const cs = tx
+              .select({ expectedCash: schema.cashSessions.expectedCash, initialCash: schema.cashSessions.initialCash })
+              .from(schema.cashSessions)
+              .where(eq(schema.cashSessions.id, cashSessionId))
+              .get();
+
+            const currentExpected = cs ? (cs.expectedCash ?? cs.initialCash) : 0;
             tx.update(schema.cashSessions)
               .set({ expectedCash: currentExpected + netCashIncrease })
               .where(eq(schema.cashSessions.id, cashSessionId))
@@ -304,6 +336,7 @@ export class SalesService {
       } catch (err) {
         const message = err instanceof Error ? err.message : '';
         if (message.includes('UNIQUE constraint failed: Sale.saleNumber') && attempt < 2) {
+          saleNumber = await buildSaleNumber();
           continue;
         }
         throw err;
@@ -389,7 +422,7 @@ export class SalesService {
       })
       .from(schema.saleItems)
       .innerJoin(schema.products, eq(schema.saleItems.productId, schema.products.id))
-      .innerJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
+      .leftJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
       .where(eq(schema.saleItems.saleId, sale.id));
 
     const payments = await db
@@ -443,7 +476,7 @@ export class SalesService {
           code: item.productCode,
           barcode: item.productBarcode,
           name: item.productName,
-          categoryName: item.categoryName,
+          categoryName: item.categoryName ?? '',
         },
       })),
       payments: payments.map((p) => ({
@@ -471,21 +504,26 @@ export class SalesService {
     };
   }
 
-  async getSalesByCashRegister(cashSessionId: number, accountId: number): Promise<SaleRecord[]> {
-    return this.getSalesBatch(eq(schema.sales.cashSessionId, cashSessionId), accountId);
+  async getSalesByCashRegister(cashSessionId: number, accountId: number, userId?: number): Promise<SaleRecord[]> {
+    const conditions = [eq(schema.sales.cashSessionId, cashSessionId)];
+    if (userId) conditions.push(eq(schema.sales.userId, userId));
+    return this.getSalesBatch(and(...conditions) as import('drizzle-orm').SQL<unknown>, accountId);
   }
 
   async getSalesByUser(userId: number, accountId: number): Promise<SaleRecord[]> {
     return this.getSalesBatch(eq(schema.sales.userId, userId), accountId);
   }
 
-  async getSalesByDateRange(startDate: Date, endDate: Date, accountId: number, branchId?: number): Promise<SaleRecord[]> {
+  async getSalesByDateRange(startDate: Date, endDate: Date, accountId: number, branchId?: number, userId?: number): Promise<SaleRecord[]> {
+    const endExclusive = new Date(endDate);
+    endExclusive.setDate(endExclusive.getDate() + 1);
     const conditions = [
       gte(schema.sales.createdAt, startDate.toISOString()),
-      lte(schema.sales.createdAt, endDate.toISOString()),
+      lt(schema.sales.createdAt, endExclusive.toISOString()),
       eq(schema.sales.accountId, accountId),
     ];
     if (branchId) conditions.push(eq(schema.sales.branchId, branchId));
+    if (userId) conditions.push(eq(schema.sales.userId, userId));
     return this.getSalesBatch(and(...conditions) as import('drizzle-orm').SQL<unknown>, accountId);
   }
 
@@ -545,7 +583,7 @@ export class SalesService {
         })
         .from(schema.saleItems)
         .innerJoin(schema.products, eq(schema.saleItems.productId, schema.products.id))
-        .innerJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
+        .leftJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
         .where(inArray(schema.saleItems.saleId, saleIds)),
       db.select().from(schema.payments).where(inArray(schema.payments.saleId, saleIds)),
     ]);
@@ -588,7 +626,7 @@ export class SalesService {
           code: item.productCode,
           barcode: item.productBarcode,
           name: item.productName,
-          categoryName: item.categoryName,
+          categoryName: item.categoryName ?? '',
         },
       }));
 
@@ -697,7 +735,7 @@ export class SalesService {
           quantity: item.quantity,
           previousStock: product.stock,
           newStock: restoredStock,
-          reason: `CancelaciÃ³n venta ${sale.saleNumber}`,
+          reason: `Cancelación venta ${sale.saleNumber}`,
           userId,
           branchId: sale.branchId ?? undefined,
           createdAt: now,
@@ -712,18 +750,49 @@ export class SalesService {
 
         if (netCashAmount > 0) {
           const cs = tx
-            .select({ expectedCash: schema.cashSessions.expectedCash, initialCash: schema.cashSessions.initialCash })
+            .select({
+              expectedCash: schema.cashSessions.expectedCash,
+              initialCash: schema.cashSessions.initialCash,
+              status: schema.cashSessions.status,
+            })
             .from(schema.cashSessions)
             .where(eq(schema.cashSessions.id, sale.cashSessionId))
             .get();
 
-          if (cs) {
+          if (cs && cs.status === 'OPEN') {
             tx.update(schema.cashSessions)
               .set({ expectedCash: (cs.expectedCash ?? cs.initialCash) - netCashAmount })
               .where(eq(schema.cashSessions.id, sale.cashSessionId))
               .run();
           }
         }
+      }
+
+      const debt = tx
+        .select({ id: schema.debts.id })
+        .from(schema.debts)
+        .where(eq(schema.debts.saleId, id))
+        .get();
+
+      if (debt) {
+        const debtPayment = tx
+          .select({ id: schema.payments.id })
+          .from(schema.payments)
+          .where(eq(schema.payments.debtId, debt.id))
+          .limit(1)
+          .get();
+
+        if (debtPayment) {
+          throw new AppError(ErrorCode.VALIDATION, 'La venta tiene abonos de deuda realizados; no se puede cancelar.');
+        }
+
+        tx.delete(schema.debts)
+          .where(eq(schema.debts.id, debt.id))
+          .run();
+
+        tx.delete(schema.payments)
+          .where(and(eq(schema.payments.saleId, id), eq(schema.payments.method, 'credito')))
+          .run();
       }
     });
 
@@ -757,7 +826,7 @@ export class SalesService {
     // Today's aggregation
     const [todayAgg] = await db
       .select({
-        count: sum(schema.sales.id).mapWith(Number),
+        count: count(schema.sales.id).mapWith(Number),
         total: sum(schema.sales.total).mapWith(Number),
       })
       .from(schema.sales)
@@ -774,9 +843,9 @@ export class SalesService {
     // Month-to-date
     const [monthAgg] = await db
       .select({
-        count: sum(schema.sales.id).mapWith(Number),
+        count: countDistinct(schema.sales.id).mapWith(Number),
         total: sum(schema.sales.total).mapWith(Number),
-        cost: sum(schema.products.cost).mapWith(Number),
+        cost: sum(sql`${schema.saleItems.quantity} * ${schema.products.cost}`).mapWith(Number),
       })
       .from(schema.sales)
       .innerJoin(schema.saleItems, eq(schema.saleItems.saleId, schema.sales.id))
@@ -936,7 +1005,7 @@ export class SalesService {
 
     const payLabels: Record<string, string> = {
       efectivo: 'Efectivo', nequi: 'Nequi', daviplata: 'Daviplata',
-      tarjeta: 'Tarjeta', transferencia: 'Transferencia', credito: 'CrÃ©dito',
+      tarjeta: 'Tarjeta', transferencia: 'Transferencia', credito: 'Crédito',
     };
     const paymentMethods = paymentRows.map((r) => ({
       method: r.method,

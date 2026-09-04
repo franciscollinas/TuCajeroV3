@@ -1,10 +1,12 @@
 node_modules/
 dist/
 release/
+build/
 *.db
 *.db-journal
 *.db-wal
 *.db-shm
+*.db.bak
 .env
 .env.local
 *.log
@@ -15,6 +17,10 @@ Thumbs.db
 tucajero-saas-web/
 .kilo/
 .agents/
+KeyGen/
 
 # Stray Windows artifact
 nul
+
+# Debug / reproduction scripts
+repro2.ts

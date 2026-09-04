@@ -90,6 +90,7 @@ export default function InventoryPage(): JSX.Element {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState<ProductFormData>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [showAdjustModal, setShowAdjustModal] = useState(false);
   const [adjustProduct, setAdjustProduct] = useState<Product | null>(null);
@@ -97,6 +98,7 @@ export default function InventoryPage(): JSX.Element {
   const [adjustQty, setAdjustQty] = useState('');
   const [adjustReason, setAdjustReason] = useState('');
   const [adjusting, setAdjusting] = useState(false);
+  const [adjustError, setAdjustError] = useState<string | null>(null);
 
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -160,7 +162,7 @@ export default function InventoryPage(): JSX.Element {
         stock: String(product.stock),
         minStock: String(product.minStock),
         criticalStock: String(product.criticalStock),
-        taxRate: String(product.taxRate ?? 0),
+        taxRate: String((product.taxRate ?? 0) * 100),
         expiryDate: product.expiryDate ?? '',
         location: product.location ?? '',
         unitType: product.unitType,
@@ -171,6 +173,7 @@ export default function InventoryPage(): JSX.Element {
       setFormData(emptyForm);
     }
     setShowFormModal(true);
+    setSaveError(null);
   };
 
   const handleSaveProduct = async () => {
@@ -188,7 +191,7 @@ export default function InventoryPage(): JSX.Element {
         stock: Number(formData.stock),
         minStock: Number(formData.minStock) || 0,
         criticalStock: Number(formData.criticalStock) || 0,
-        taxRate: Number(formData.taxRate) || 0,
+        taxRate: Number(formData.taxRate) / 100 || 0,
         expiryDate: formData.expiryDate || null,
         location: formData.location.trim() || null,
         unitType: formData.unitType || 'unidad',
@@ -203,12 +206,14 @@ export default function InventoryPage(): JSX.Element {
       }
 
       setShowFormModal(false);
+      setSaveError(null);
       fetchProducts();
 
       const alerts = await trpc.inventory.getStockAlerts.query();
       setStockAlerts(alerts);
     } catch (err) {
       rendererLogger.error('InventoryPage', 'Error saving product:', err);
+      setSaveError(err instanceof Error ? err.message : 'Error al guardar el producto');
     } finally {
       setSaving(false);
     }
@@ -219,6 +224,7 @@ export default function InventoryPage(): JSX.Element {
     setAdjustType('entrada');
     setAdjustQty('');
     setAdjustReason('');
+    setAdjustError(null);
     setShowAdjustModal(true);
   };
 
@@ -236,12 +242,14 @@ export default function InventoryPage(): JSX.Element {
         userId: user.id,
       });
       setShowAdjustModal(false);
+      setAdjustError(null);
       fetchProducts();
 
       const alerts = await trpc.inventory.getStockAlerts.query();
       setStockAlerts(alerts);
     } catch (err) {
       rendererLogger.error('InventoryPage', 'Error adjusting stock:', err);
+      setAdjustError(err instanceof Error ? err.message : 'Error al ajustar el stock');
     } finally {
       setAdjusting(false);
     }
@@ -580,6 +588,11 @@ export default function InventoryPage(): JSX.Element {
           </>
         }
       >
+        {saveError && (
+          <div className="mb-4 px-4 py-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg">
+            {saveError}
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="tc-field">
             <label className="tc-label">{es.inventory.code} *</label>
@@ -620,13 +633,14 @@ export default function InventoryPage(): JSX.Element {
             />
           </div>
           <div className="tc-field">
-            <label className="tc-label">{es.inventory.category}</label>
+            <label className="tc-label">{es.inventory.category} *</label>
             <select
               value={formData.categoryId}
               onChange={(e) => setFormData({ ...formData, categoryId: e.target.value ? Number(e.target.value) : '' })}
               className="tc-input"
+              required
             >
-              <option value="">{es.inventory.all}</option>
+              <option value="">{es.inventory.selectCategory}</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
@@ -758,6 +772,11 @@ export default function InventoryPage(): JSX.Element {
         }
       >
         <div className="space-y-4">
+          {adjustError && (
+            <div className="px-4 py-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg">
+              {adjustError}
+            </div>
+          )}
           <div className="tc-field">
             <label className="tc-label">{es.inventory.adjustmentType}</label>
             <div className="flex gap-3">

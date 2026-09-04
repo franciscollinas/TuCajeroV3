@@ -1,8 +1,7 @@
 import { getDatabase, schema } from '../db';
-import { nowISO } from '../utils/date';
+import { nowISO, parseLocalDateOnly } from '../utils/date';
 import { logger } from '../utils/logger';
-import { AppError, ErrorCode } from '../utils/errors';
-import { desc, eq, and, gte, lte } from 'drizzle-orm';
+import { desc, eq, and, gte, lt } from 'drizzle-orm';
 
 export class AuditService {
   async log(input: {
@@ -13,7 +12,29 @@ export class AuditService {
     payload: unknown;
   }): Promise<void> {
     const db = getDatabase();
+    let accountId: number | null = null;
+    try {
+      const [user] = await db
+        .select({ accountId: schema.users.accountId })
+        .from(schema.users)
+        .where(eq(schema.users.id, input.userId))
+        .limit(1);
+      accountId = user?.accountId ?? null;
+    } catch (err) {
+      logger.error({ err, userId: input.userId }, 'Could not resolve audit account, retrying');
+      try {
+        const [user] = await db
+          .select({ accountId: schema.users.accountId })
+          .from(schema.users)
+          .where(eq(schema.users.id, input.userId))
+          .limit(1);
+        accountId = user?.accountId ?? null;
+      } catch (retryErr) {
+        logger.error({ retryErr, userId: input.userId }, 'Audit account lookup retry failed');
+      }
+    }
     const entry = {
+      accountId,
       userId: input.userId,
       action: input.action,
       entity: input.entity,
@@ -29,8 +50,7 @@ export class AuditService {
       try {
         await db.insert(schema.auditLogs).values(entry).run();
       } catch (retryErr) {
-        logger.error({ retryErr }, 'Audit log retry failed');
-        throw new AppError(ErrorCode.INTERNAL_ERROR, 'No se pudo registrar la operación en auditoría.');
+        logger.error({ retryErr }, 'Audit log retry failed; la operación continúa sin auditoría');
       }
     }
   }
@@ -55,16 +75,16 @@ export class AuditService {
     const db = getDatabase();
     const conditions = [];
 
-    if (opts?.startDate) conditions.push(gte(schema.auditLogs.createdAt, opts.startDate));
+    if (opts?.startDate) conditions.push(gte(schema.auditLogs.createdAt, parseLocalDateOnly(opts.startDate).toISOString()));
     if (opts?.endDate) {
-      const end = new Date(opts.endDate);
-      end.setDate(end.getDate() + 1);
-      conditions.push(lte(schema.auditLogs.createdAt, end.toISOString()));
+      const endExclusive = parseLocalDateOnly(opts.endDate);
+      endExclusive.setDate(endExclusive.getDate() + 1);
+      conditions.push(lt(schema.auditLogs.createdAt, endExclusive.toISOString()));
     }
     if (opts?.userId) conditions.push(eq(schema.auditLogs.userId, opts.userId));
     if (opts?.action) conditions.push(eq(schema.auditLogs.action, opts.action));
     if (opts?.entity) conditions.push(eq(schema.auditLogs.entity, opts.entity));
-    if (opts?.accountId) conditions.push(eq(schema.users.accountId, opts.accountId));
+    if (opts?.accountId) conditions.push(eq(schema.auditLogs.accountId, opts.accountId));
 
     const rows = await db
       .select({

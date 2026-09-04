@@ -121,7 +121,7 @@ export class PayrollService {
       const start = new Date(s.createdAt).getTime();
       const end = s.closedAt
         ? new Date(s.closedAt).getTime()
-        : new Date(s.expiresAt).getTime();
+        : Math.min(Date.now(), new Date(s.expiresAt).getTime());
       const seconds = Math.max(0, (end - start) / 1000);
 
       const dayKey = s.createdAt.slice(0, 10);

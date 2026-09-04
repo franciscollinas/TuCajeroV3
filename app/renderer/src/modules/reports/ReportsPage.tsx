@@ -1,7 +1,7 @@
 import { rendererLogger } from '../../shared/utils/rendererLogger';
 import { useState, useEffect } from 'react';
 import {
-  BarChart3, TrendingUp, DollarSign, Package, Percent,
+  BarChart3, TrendingUp, DollarSign, Package,
   ShoppingCart, Download, FileSpreadsheet, AlertTriangle,
   Calendar, Clock, ChevronRight, CreditCard,
 } from 'lucide-react';
@@ -10,13 +10,13 @@ import {
   ResponsiveContainer, LineChart, Line, Cell,
 } from 'recharts';
 import { trpc } from '../../trpc';
-import { formatCurrency, formatDate, formatDateTime } from '../../shared/utils/formatters';
+import { formatCurrency, formatDate, formatDateTime, toLocalDateInput } from '../../shared/utils/formatters';
 import { es } from '../../shared/i18n';
 import { Card } from '../../shared/components/Card';
 import { StatusBadge } from '../../shared/components/StatusBadge';
 import { LoadingSpinner } from '../../shared/components/LoadingSpinner';
 import { EmptyState } from '../../shared/components/EmptyState';
-import type { DashboardSummary } from '../../shared/types/sales.types';
+import type { SaleRecord } from '../../shared/types/sales.types';
 import type { StockAlerts, ExpiryAlerts, NoRotationProduct } from '../../shared/types/inventory.types';
 import type { CashClosureRow } from '../../shared/types/cash.types';
 
@@ -34,13 +34,13 @@ interface AuditEntry {
 export default function ReportsPage(): JSX.Element {
   const today = new Date();
   const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-  const [startDate, setStartDate] = useState(firstDay.toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(today.toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(toLocalDateInput(firstDay));
+  const [endDate, setEndDate] = useState(toLocalDateInput(today));
   const [loading, setLoading] = useState(true);
+  const [reportError, setReportError] = useState<string | null>(null);
   const [exporting, setExporting] = useState<'csv' | 'xlsx' | null>(null);
   const [activeTab, setActiveTab] = useState<ReportTab>('general');
 
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [stockData, setStockData] = useState<StockAlerts | null>(null);
   const [expiryData, setExpiryData] = useState<ExpiryAlerts | null>(null);
   const [closures, setClosures] = useState<CashClosureRow[]>([]);
@@ -49,23 +49,35 @@ export default function ReportsPage(): JSX.Element {
   const [noRotation, setNoRotation] = useState<NoRotationProduct[]>([]);
   const [prevRevenue, setPrevRevenue] = useState(0);
   const [prevSales, setPrevSales] = useState(0);
+  const [periodSales, setPeriodSales] = useState<SaleRecord[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     const fetchData = async () => {
       setLoading(true);
+      setReportError(null);
       try {
-        const [summaryData, stockAlerts, expiryAlerts, closuresData, inventoryData, auditData, noRotationData] = await Promise.all([
-          trpc.sales.getDashboardSummary.query().catch(() => null),
-          trpc.inventory.getStockAlerts.query().catch(() => null),
-          trpc.inventory.getExpiryAlerts.query().catch(() => null),
-          trpc.cash.listClosures.query().catch(() => []),
-          trpc.inventory.getAll.query({}).catch(() => null),
-          trpc.audit.list.query({ limit: 20, startDate, endDate }).catch(() => []),
-          trpc.inventory.getNoRotation.query().catch(() => []),
+        const start = new Date(`${startDate}T12:00:00`);
+        const end = new Date(`${endDate}T12:00:00`);
+        const periodDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1);
+        const previousStartDate = new Date(start);
+        previousStartDate.setDate(previousStartDate.getDate() - periodDays);
+        const previousEndDate = new Date(start);
+        previousEndDate.setDate(previousEndDate.getDate() - 1);
+        const previousSalesPromise = trpc.sales.getByDateRange.query({
+          startDate: toLocalDateInput(previousStartDate),
+          endDate: toLocalDateInput(previousEndDate),
+        });
+        const [stockAlerts, expiryAlerts, closuresData, inventoryData, auditData, noRotationData, currentSalesData] = await Promise.all([
+          trpc.inventory.getStockAlerts.query(),
+          trpc.inventory.getExpiryAlerts.query(),
+          trpc.cash.listClosures.query(),
+          trpc.inventory.getAll.query({}),
+          trpc.audit.list.query({ limit: 20, startDate, endDate }),
+          trpc.inventory.getNoRotation.query(),
+          trpc.sales.getByDateRange.query({ startDate, endDate }),
         ]);
         if (cancelled) return;
-        setSummary(summaryData as DashboardSummary | null);
         setStockData(stockAlerts as StockAlerts | null);
         setExpiryData(expiryAlerts as ExpiryAlerts | null);
         setClosures(closuresData as CashClosureRow[]);
@@ -76,23 +88,21 @@ export default function ReportsPage(): JSX.Element {
           setInventoryValue(totalValue);
         }
         setNoRotation(noRotationData as NoRotationProduct[]);
+        setPeriodSales((currentSalesData as SaleRecord[]).filter((sale) => sale.status === 'COMPLETED'));
 
-        // Previous period comparison
-        const periodMs = new Date(endDate).getTime() - new Date(startDate).getTime();
-        const prevStart = new Date(new Date(startDate).getTime() - periodMs).toISOString().split('T')[0];
-        const prevEnd = new Date(new Date(startDate).getTime()).toISOString().split('T')[0];
         try {
-          const prevSalesData = await trpc.sales.getByDateRange.query({ startDate: prevStart, endDate: prevEnd });
-          const prevSalesArr = prevSalesData as Array<{ total: number }>;
+          const prevSalesData = await previousSalesPromise;
+          const prevSalesArr = (prevSalesData as SaleRecord[]).filter((sale) => sale.status === 'COMPLETED');
           const totalPrevRevenue = prevSalesArr.reduce((s, x) => s + Number(x.total ?? 0), 0);
           const totalPrevCount = prevSalesArr.length;
           setPrevRevenue(totalPrevRevenue);
           setPrevSales(totalPrevCount);
-        } catch {
-          // silent
+        } catch (prevErr) {
+          rendererLogger.error('ReportsPage', 'Error loading previous period:', prevErr);
         }
-      } catch {
-        // silent
+      } catch (err) {
+        rendererLogger.error('ReportsPage', 'Error loading report data:', err);
+        if (!cancelled) setReportError(err instanceof Error ? err.message : 'No se pudo cargar el reporte.');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -101,20 +111,39 @@ export default function ReportsPage(): JSX.Element {
     return () => { cancelled = true; };
   }, [startDate, endDate]);
 
-  const totalSales = summary?.today.totalVendidos ?? 0;
-  const netRevenue = summary?.today.totalMonto ?? 0;
-  const monthRevenue = summary?.monthToDate.totalIngresos ?? 0;
-  const estimatedProfit = summary?.monthToDate.totalProfit ?? 0;
-  const profitMargin = netRevenue > 0 ? (estimatedProfit / monthRevenue) * 100 : 0;
+  const totalSales = periodSales.length;
+  const netRevenue = periodSales.reduce((sum, sale) => sum + Number(sale.total), 0);
   const avgTicket = totalSales > 0 ? netRevenue / totalSales : 0;
 
   const stockAlertsTotal = (stockData?.critical.length ?? 0) + (stockData?.warning.length ?? 0);
   const expiryAlertsTotal = (expiryData?.expired.length ?? 0) + (expiryData?.expiringSoon.length ?? 0);
 
-  // Compute sales by product from monthly chart
-  const salesData = summary?.monthlyChart ?? [];
+  // El gráfico también se deriva del período elegido, no del resumen mensual.
+  const salesData = Array.from(periodSales.reduce((byDay, sale) => {
+    const day = sale.createdAt.slice(0, 10);
+    const entry = byDay.get(day) ?? { name: day, ventas: 0, ingresos: 0 };
+    entry.ventas += 1;
+    entry.ingresos += Number(sale.total);
+    byDay.set(day, entry);
+    return byDay;
+  }, new Map<string, { name: string; ventas: number; ingresos: number }>()).values());
   const totalSalesInPeriod = salesData.reduce((sum, d) => sum + d.ventas, 0);
   const totalRevenueInPeriod = salesData.reduce((sum, d) => sum + d.ingresos, 0);
+  const paymentMethods = Array.from(periodSales.reduce((methods, sale) => {
+    for (const payment of sale.payments) {
+      methods.set(payment.method, (methods.get(payment.method) ?? 0) + Number(payment.amount));
+    }
+    return methods;
+  }, new Map<string, number>()).entries()).map(([method, total]) => ({ method, label: method, total }));
+  const topProducts = Array.from(periodSales.reduce((products, sale) => {
+    for (const item of sale.items) {
+      const current = products.get(item.productId) ?? { id: item.productId, name: item.product?.name ?? `Producto #${item.productId}`, quantity: 0, total: 0 };
+      current.quantity += Number(item.quantity);
+      current.total += Number(item.total);
+      products.set(item.productId, current);
+    }
+    return products;
+  }, new Map<number, { id: number; name: string; quantity: number; total: number }>()).values()).sort((a, b) => b.total - a.total).slice(0, 10);
 
   const handleExport = async (format: 'csv' | 'xlsx') => {
     setExporting(format);
@@ -146,6 +175,10 @@ export default function ReportsPage(): JSX.Element {
         <LoadingSpinner size={40} />
       </div>
     );
+  }
+
+  if (reportError) {
+    return <EmptyState icon={AlertTriangle} title="No se pudo cargar el reporte" description={reportError} className="py-16" />;
   }
 
   return (
@@ -207,10 +240,8 @@ export default function ReportsPage(): JSX.Element {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
             <MetricCard icon={ShoppingCart} label={es.reports.totalSales} value={String(totalSales)} color="blue" compareLabel={prevSales > 0 ? `vs ${prevSales} anterior` : undefined} compareValue={prevSales > 0 ? ((totalSales - prevSales) / prevSales * 100) : undefined} />
             <MetricCard icon={TrendingUp} label={es.reports.netRevenue} value={formatCurrency(netRevenue)} color="emerald" compareLabel={prevRevenue > 0 ? 'vs período anterior' : undefined} compareValue={prevRevenue > 0 ? ((netRevenue - prevRevenue) / prevRevenue * 100) : undefined} />
-            <MetricCard icon={DollarSign} label="Ingresos del mes" value={formatCurrency(monthRevenue)} color="indigo" />
+            <MetricCard icon={DollarSign} label="Ticket promedio" value={formatCurrency(avgTicket)} color="indigo" />
             <MetricCard icon={Package} label={es.reports.inventoryValue} value={formatCurrency(inventoryValue)} color="indigo" />
-            <MetricCard icon={DollarSign} label="Ganancia estimada" value={formatCurrency(estimatedProfit)} color="amber" />
-            <MetricCard icon={Percent} label="Margen" value={`${profitMargin.toFixed(1)}%`} color="purple" />
           </div>
 
           {/* Sales Chart */}
@@ -237,17 +268,17 @@ export default function ReportsPage(): JSX.Element {
           </Card>
 
           {/* Payment Methods */}
-          {summary?.paymentMethods && summary.paymentMethods.length > 0 && (
+          {paymentMethods.length > 0 && (
             <Card title="Ingresos por método de pago">
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={summary.paymentMethods} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <BarChart data={paymentMethods} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                     <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }} formatter={(value: number) => [formatCurrency(value), 'Total']} />
                     <Bar dataKey="total" radius={[4, 4, 0, 0]} name="total">
-                    {summary.paymentMethods.map((entry, index) => (
+                    {paymentMethods.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={['#6366f1', '#10b981', '#f59e0b'][index % 3]} />
                     ))}
                   </Bar>
@@ -258,7 +289,7 @@ export default function ReportsPage(): JSX.Element {
           )}
 
           {/* Top Products */}
-          {summary?.topProducts && summary.topProducts.length > 0 && (
+          {topProducts.length > 0 && (
             <Card title="Productos más vendidos">
               <div className="overflow-x-auto border border-gray-200 rounded-lg">
                 <table className="w-full border-collapse">
@@ -271,7 +302,7 @@ export default function ReportsPage(): JSX.Element {
                     </tr>
                   </thead>
                   <tbody>
-                    {summary.topProducts.map((p, i) => (
+                    {topProducts.map((p, i) => (
                       <tr key={p.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 text-sm text-gray-500 border-b border-gray-100">{i + 1}</td>
                         <td className="px-4 py-3 text-sm font-medium text-gray-900 border-b border-gray-100">{p.name}</td>
@@ -325,7 +356,7 @@ export default function ReportsPage(): JSX.Element {
             )}
           </Card>
 
-          {summary?.paymentMethods && summary.paymentMethods.length > 0 && (
+          {paymentMethods.length > 0 && (
             <Card title="Distribución por método de pago">
               <div className="overflow-x-auto border border-gray-200 rounded-lg">
                 <table className="w-full border-collapse">
@@ -336,7 +367,7 @@ export default function ReportsPage(): JSX.Element {
                     </tr>
                   </thead>
                   <tbody>
-                    {summary.paymentMethods.map((pm) => (
+                    {paymentMethods.map((pm) => (
                       <tr key={pm.method} className="hover:bg-gray-50">
                         <td className="px-4 py-3 text-sm text-gray-700 border-b border-gray-100 flex items-center gap-2"><StatusBadge status={pm.method} label={pm.label} /></td>
                         <td className="px-4 py-3 text-sm font-semibold text-gray-900 border-b border-gray-100 text-right">{formatCurrency(pm.total)}</td>

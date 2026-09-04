@@ -194,6 +194,7 @@ export const cashSessions = sqliteTable('CashSession', {
   difference: real('difference'),
   openedAt: text('openedAt').notNull(),
   closedAt: text('closedAt'),
+  lastActivityAt: text('lastActivityAt'),
   status: text('status').notNull().default('OPEN'),
 }, (table) => [
   index('idx_cashsession_status').on(table.status),

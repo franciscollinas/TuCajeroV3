@@ -56,6 +56,17 @@ export function useBarcodeScanner(options: BarcodeScannerOptions = {}): BarcodeS
     if (!enabled) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignorar si el usuario está escribiendo dentro de un campo de texto
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
       if (e.key === 'Enter' && bufferRef.current.length >= minLength) {
         e.preventDefault();
         const barcode = bufferRef.current;

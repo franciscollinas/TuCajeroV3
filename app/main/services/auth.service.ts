@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { eq, and, gt } from 'drizzle-orm';
+import { eq, and, gt, isNull } from 'drizzle-orm';
 import crypto from 'crypto';
 
 import { getDatabase, schema } from '../db';
@@ -168,6 +168,7 @@ export class AuthService {
         and(
           eq(schema.sessions.token, hashToken(token)),
           gt(schema.sessions.expiresAt, now),
+          isNull(schema.sessions.closedAt),
         ),
       )
       .limit(1);

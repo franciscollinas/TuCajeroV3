@@ -435,6 +435,29 @@ export class QuoteService {
 
     if (!existing) throw new AppError(ErrorCode.NOT_FOUND, 'Cotización no encontrada');
 
+    const session = await db
+      .select({ id: schema.cashSessions.id, userId: schema.cashSessions.userId, status: schema.cashSessions.status, accountId: schema.cashSessions.accountId })
+      .from(schema.cashSessions)
+      .where(eq(schema.cashSessions.id, cashSessionId))
+      .get();
+
+    if (!session || session.accountId !== accountId) {
+      throw new AppError(ErrorCode.NO_OPEN_SESSION, 'Sesión de caja no encontrada.');
+    }
+    if (session.status !== 'OPEN') {
+      throw new AppError(ErrorCode.NO_OPEN_SESSION, 'No hay una sesión de caja abierta.');
+    }
+    if (session.userId !== userId) {
+      throw new AppError(ErrorCode.FORBIDDEN, 'No puedes convertir una cotización en la caja de otro usuario.');
+    }
+
+    let totalPaid = 0;
+    for (const p of payments) totalPaid += p.amount;
+    if (totalPaid < existing.total) {
+      throw new AppError(ErrorCode.VALIDATION, `El pago (${totalPaid}) es menor que el total de la venta (${existing.total}).`);
+    }
+    const change = Math.max(0, totalPaid - existing.total);
+
     // Fetch sale items
     const quoteItems = await db
       .select()
@@ -447,17 +470,13 @@ export class QuoteService {
     const [lastSale] = await db
       .select({ saleNumber: schema.sales.saleNumber })
       .from(schema.sales)
-      .where(like(schema.sales.saleNumber, `${prefix}%`))
+      .where(and(eq(schema.sales.accountId, accountId), like(schema.sales.saleNumber, `${prefix}%`)))
       .orderBy(desc(schema.sales.saleNumber))
       .limit(1);
 
     const nextNumber = lastSale ? Number(lastSale.saleNumber.split('-')[2]) + 1 : 1;
     const saleNumber = `${prefix}${String(nextNumber).padStart(4, '0')}`;
     const now = nowISO();
-
-    let totalPaid = 0;
-    for (const p of payments) totalPaid += p.amount;
-    const change = Math.max(0, totalPaid - existing.total);
 
     // Perform all mutations in a transaction: validate stock, update sale, deduct stock, record movements, update cash session
     await db.transaction((tx) => {
@@ -482,6 +501,7 @@ export class QuoteService {
           saleNumber,
           status: 'COMPLETED',
           cashSessionId,
+          userId,
           change,
           createdAt: now,
         })

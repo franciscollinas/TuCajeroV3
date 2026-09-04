@@ -1,10 +1,12 @@
 import { join } from 'path';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { getDatabase, schema } from '../db';
-import { eq, and, gte, lte, desc } from 'drizzle-orm';
+import { eq, and, gte, lt, desc } from 'drizzle-orm';
+import { parseLocalDateOnly, toLocalIsoDate } from '../utils/date';
+import { getExportsDir } from '../utils/paths';
 import ExcelJS from 'exceljs';
 
-const EXPORTS_DIR = join(process.cwd(), 'exports');
+const EXPORTS_DIR = getExportsDir();
 
 export class ExportService {
   private ensureDir(sub: string): string {
@@ -16,8 +18,8 @@ export class ExportService {
   async exportInventory(format: 'csv' | 'xlsx' = 'csv', accountId?: number | null): Promise<string> {
     const db = getDatabase();
     const dir = this.ensureDir(format);
-    const ts = new Date().toISOString().slice(0, 10);
-    const fileName = `inventario_${ts}.${format}`;
+    const ts = toLocalIsoDate(new Date());
+    const fileName = `inventario_${accountId ? accountId + '_' : ''}${ts}.${format}`;
     const filePath = join(dir, fileName);
 
     const products = await db
@@ -53,7 +55,7 @@ export class ExportService {
       Stock: p.stock,
       'Stock Mínimo': p.minStock,
       'Stock Crítico': p.criticalStock,
-      'IVA %': (p.taxRate * 100).toFixed(0),
+      'IVA %': Number(((p.taxRate ?? 0) * 100).toFixed(2)),
       Unidad: p.unitType,
       Activo: p.isActive ? 'Sí' : 'No',
       Ubicación: p.location ?? '',
@@ -71,13 +73,17 @@ export class ExportService {
   async exportSales(dateFrom?: string, dateTo?: string, branchId?: number, format: 'csv' | 'xlsx' = 'csv', accountId?: number | null): Promise<string> {
     const db = getDatabase();
     const dir = this.ensureDir(format);
-    const ts = new Date().toISOString().slice(0, 10);
-    const fileName = `ventas_${ts}.${format}`;
+    const ts = toLocalIsoDate(new Date());
+    const fileName = `ventas_${accountId ? accountId + '_' : ''}${ts}.${format}`;
     const filePath = join(dir, fileName);
 
     const conditions = [eq(schema.sales.status, 'COMPLETED')];
-    if (dateFrom) conditions.push(gte(schema.sales.createdAt, dateFrom));
-    if (dateTo) conditions.push(lte(schema.sales.createdAt, dateTo + 'T23:59:59'));
+    if (dateFrom) conditions.push(gte(schema.sales.createdAt, parseLocalDateOnly(dateFrom).toISOString()));
+    if (dateTo) {
+      const endExclusive = parseLocalDateOnly(dateTo);
+      endExclusive.setDate(endExclusive.getDate() + 1);
+      conditions.push(lt(schema.sales.createdAt, endExclusive.toISOString()));
+    }
     if (branchId) conditions.push(eq(schema.sales.branchId, branchId));
     if (accountId) conditions.push(eq(schema.sales.accountId, accountId));
 
@@ -134,7 +140,7 @@ export class ExportService {
 
   async exportPayroll(userId: number, periodStart: string, periodEnd: string, format: 'csv' | 'xlsx' = 'csv', accountId?: number | null): Promise<string> {
     const dir = this.ensureDir(format);
-    const fileName = `nomina_${periodStart}_${periodEnd}.${format}`;
+    const fileName = `nomina_${accountId ? accountId + '_' : ''}${periodStart}_${periodEnd}.${format}`;
     const filePath = join(dir, fileName);
 
     const { PayrollService } = await import('./payroll.service');
@@ -192,8 +198,8 @@ export class ExportService {
     }));
 
     const dir = this.ensureDir(format);
-    const ts = new Date().toISOString().slice(0, 10);
-    const fileName = `auditoria_${ts}.${format}`;
+    const ts = toLocalIsoDate(new Date());
+    const fileName = `auditoria_${accountId ? accountId + '_' : ''}${ts}.${format}`;
     const filePath = join(dir, fileName);
 
     if (format === 'xlsx') {
@@ -207,13 +213,17 @@ export class ExportService {
   async exportCashSessions(startDate?: string, endDate?: string, format: 'csv' | 'xlsx' = 'csv', accountId?: number | null): Promise<string> {
     const db = getDatabase();
     const dir = this.ensureDir(format);
-    const ts = new Date().toISOString().slice(0, 10);
-    const fileName = `cierres_caja_${ts}.${format}`;
+    const ts = toLocalIsoDate(new Date());
+    const fileName = `cierres_caja_${accountId ? accountId + '_' : ''}${ts}.${format}`;
     const filePath = join(dir, fileName);
 
     const conditions: ReturnType<typeof gte>[] = [];
-    if (startDate) conditions.push(gte(schema.cashSessions.closedAt, startDate));
-    if (endDate) conditions.push(lte(schema.cashSessions.closedAt, endDate + 'T23:59:59'));
+    if (startDate) conditions.push(gte(schema.cashSessions.closedAt, parseLocalDateOnly(startDate).toISOString()));
+    if (endDate) {
+      const endExclusive = parseLocalDateOnly(endDate);
+      endExclusive.setDate(endExclusive.getDate() + 1);
+      conditions.push(lt(schema.cashSessions.closedAt, endExclusive.toISOString()));
+    }
 
     const query = db
       .select({
@@ -277,8 +287,8 @@ export class ExportService {
   async exportNoRotation(format: 'csv' | 'xlsx' = 'csv', accountId?: number | null): Promise<string> {
     const db = getDatabase();
     const dir = this.ensureDir(format);
-    const ts = new Date().toISOString().slice(0, 10);
-    const fileName = `sin_rotacion_${ts}.${format}`;
+    const ts = toLocalIsoDate(new Date());
+    const fileName = `sin_rotacion_${accountId ? accountId + '_' : ''}${ts}.${format}`;
     const filePath = join(dir, fileName);
 
     const ninetyDaysAgo = new Date();

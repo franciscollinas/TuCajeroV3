@@ -1,5 +1,5 @@
 import { useState, useEffect, type FormEvent } from 'react';
-import { Printer, Save, Radio, TestTube, ChevronRight } from 'lucide-react';
+import { Printer, Save, Radio, TestTube, ChevronRight, RefreshCw } from 'lucide-react';
 import { trpc } from '../../trpc';
 import { es } from '../../shared/i18n';
 import { Card } from '../../shared/components/Card';
@@ -25,6 +25,8 @@ export default function PrinterSettingsPage(): JSX.Element {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [printers, setPrinters] = useState<string[]>([]);
+  const [loadingPrinters, setLoadingPrinters] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error'>('success');
 
@@ -51,6 +53,24 @@ export default function PrinterSettingsPage(): JSX.Element {
     load();
     return () => { cancelled = true; };
   }, []);
+
+  const loadPrinters = async () => {
+    setLoadingPrinters(true);
+    try {
+      const list = await trpc.config.listPrinters.query();
+      setPrinters(list);
+    } catch {
+      setPrinters([]);
+    } finally {
+      setLoadingPrinters(false);
+    }
+  };
+
+  useEffect(() => {
+    if (form.type === 'Windows') {
+      void loadPrinters();
+    }
+  }, [form.type]);
 
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
@@ -131,6 +151,40 @@ export default function PrinterSettingsPage(): JSX.Element {
                 ))}
               </div>
             </div>
+
+            {form.type === 'Windows' && (
+              <div>
+                <label className="tc-label flex items-center gap-2">
+                  Impresora del sistema
+                  <button
+                    type="button"
+                    onClick={loadPrinters}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-700 cursor-pointer"
+                  >
+                    <RefreshCw size={12} className={loadingPrinters ? 'animate-spin' : ''} />
+                    Refrescar
+                  </button>
+                </label>
+                <select
+                  value={form.connectionString}
+                  onChange={(e) => setForm((prev) => ({ ...prev, connectionString: e.target.value }))}
+                  className="tc-input"
+                  disabled={loadingPrinters}
+                >
+                  <option value="">Seleccionar impresora...</option>
+                  {printers.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-400 mt-1.5">
+                  {loadingPrinters
+                    ? 'Cargando impresoras instaladas...'
+                    : printers.length === 0
+                      ? 'No se encontraron impresoras. Verifique la instalación de Windows.'
+                      : 'Seleccione la impresora térmica correcta para evitar imprimir en otra.'}
+                </p>
+              </div>
+            )}
 
             <div>
               <label className="tc-label">{es.settings.printer.paperWidth}</label>

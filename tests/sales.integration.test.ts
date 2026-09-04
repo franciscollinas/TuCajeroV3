@@ -1,12 +1,26 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import Database from 'better-sqlite3';
 import { SalesService } from '../app/main/services/sales.service';
 import { CashSessionService } from '../app/main/services/cash-session.service';
 import { CashExpenseService } from '../app/main/services/cash-expense.service';
 import { InventoryService } from '../app/main/services/inventory.service';
 import { setupTestDatabase, cleanupTestDatabase, resetDatabaseState } from './integration-helper';
-import { setDatabasePath, closeDatabase } from '../app/main/db/index';
+import { setDatabasePath, closeDatabase, getDatabase, schema } from '../app/main/db/index';
+import { LicenseService } from '../app/main/services/license.service';
+import { eq } from 'drizzle-orm';
 
-describe('Sales integration', () => {
+let nativeDbAvailable = true;
+try {
+  new Database(':memory:').close();
+} catch {
+  nativeDbAvailable = false;
+}
+
+// better-sqlite3 está compilado para el ABI de Electron; si se ejecuta vitest con
+// el Node del sistema y el binario no coincide (NODE_MODULE_VERSION), se salta.
+const serviceDescribe = nativeDbAvailable ? describe : describe.skip;
+
+serviceDescribe('Sales integration', () => {
   let tempDbPath: string;
   let salesService: SalesService;
   let inventoryService: InventoryService;
@@ -33,7 +47,7 @@ describe('Sales integration', () => {
     try {
       const active = await cashSessionService.getActiveCashSession(1);
       if (active) {
-        await cashSessionService.closeCashSession(active.id, active.expectedCash ?? active.initialCash, active.expectedCash ?? active.initialCash, 1);
+        await cashSessionService.closeCashSession(active.id, active.expectedCash ?? active.initialCash, active.expectedCash ?? active.initialCash, 1, 1);
       }
     } catch {
       // ignore cleanup errors
@@ -44,7 +58,7 @@ describe('Sales integration', () => {
     const accountId = 1;
     const userId = 1;
 
-    const products = await inventoryService.getAllProducts(undefined, accountId);
+    const { products } = await inventoryService.getAllProducts(undefined, accountId);
     expect(products.length).toBeGreaterThan(0);
 
     const product = products[0];
@@ -84,7 +98,7 @@ describe('Sales integration', () => {
     const accountId = 1;
     const userId = 1;
 
-    const products = await inventoryService.getAllProducts(undefined, accountId);
+    const { products } = await inventoryService.getAllProducts(undefined, accountId);
     const product = products[0];
 
     const session = await cashSessionService.openCashSession(accountId, userId, 100000);
@@ -107,11 +121,39 @@ describe('Sales integration', () => {
     ).rejects.toThrow();
   });
 
+  it('rejects a sale registered against another cashier\'s open session', async () => {
+    const accountId = 1;
+    const db = getDatabase();
+    const now = new Date().toISOString();
+    const [otherUser] = await db.insert(schema.users).values({
+      accountId,
+      username: `cashier-${Date.now()}`,
+      password: 'test',
+      fullName: 'Otro Cajero',
+      role: 'CASHIER',
+      active: true,
+      mustChangePassword: false,
+      createdAt: now,
+      updatedAt: now,
+    }).returning();
+    const { products } = await inventoryService.getAllProducts(undefined, accountId);
+    const product = products[0];
+    const foreignSession = await cashSessionService.openCashSession(accountId, otherUser.id, 100000);
+
+    await expect(salesService.createSale(
+      foreignSession.id,
+      1,
+      [{ productId: product.id, quantity: 1, unitPrice: product.price, discount: 0 }],
+      [{ method: 'efectivo', amount: product.price * 1.19 }],
+      accountId,
+    )).rejects.toThrow('caja de otro usuario');
+  });
+
   it('rejects payment mismatch', async () => {
     const accountId = 1;
     const userId = 1;
 
-    const products = await inventoryService.getAllProducts(undefined, accountId);
+    const { products } = await inventoryService.getAllProducts(undefined, accountId);
     const product = products[0];
 
     const session = await cashSessionService.openCashSession(accountId, userId, 100000);
@@ -135,7 +177,7 @@ describe('Sales integration', () => {
   });
 });
 
-describe('Cash integration', () => {
+serviceDescribe('Cash integration', () => {
   let tempDbPath: string;
   let cashSessionService: CashSessionService;
   let cashExpenseService: CashExpenseService;
@@ -160,7 +202,7 @@ describe('Cash integration', () => {
     try {
       const active = await cashSessionService.getActiveCashSession(1);
       if (active) {
-        await cashSessionService.closeCashSession(active.id, active.expectedCash ?? active.initialCash, active.expectedCash ?? active.initialCash, 1);
+        await cashSessionService.closeCashSession(active.id, active.expectedCash ?? active.initialCash, active.expectedCash ?? active.initialCash, 1, 1);
       }
     } catch {
       // ignore cleanup errors
@@ -179,7 +221,7 @@ describe('Cash integration', () => {
     expect(active).not.toBeNull();
     expect(active?.id).toBe(session.id);
 
-    const closeResult = await cashSessionService.closeCashSession(session.id, 210000, 210000, accountId);
+    const closeResult = await cashSessionService.closeCashSession(session.id, session.initialCash, session.initialCash, accountId, userId);
     expect(closeResult.difference).toBe(0);
 
     const afterClose = await cashSessionService.getActiveCashSession(userId);
@@ -205,7 +247,7 @@ describe('Cash integration', () => {
   });
 });
 
-describe('DianService integration', () => {
+serviceDescribe('DianService integration', () => {
   let tempDbPath: string;
 
   beforeAll(async () => {
@@ -223,7 +265,12 @@ describe('DianService integration', () => {
   });
 
   it('returns invalid license when no license is stored', async () => {
-    const { LicenseService } = await import('../app/main/services/license.service');
+    // El archivo fuente copiado (database/tucajero.db) puede contener una
+    // licencia y first_run_at reales; se limpian para probar el estado "none".
+    const db = getDatabase();
+    db.delete(schema.configs).where(eq(schema.configs.key, 'license_data')).run();
+    db.delete(schema.configs).where(eq(schema.configs.key, 'first_run_at')).run();
+
     const licenseService = new LicenseService();
     const status = await licenseService.getLicenseStatus();
     expect(status.status).toBe('none');

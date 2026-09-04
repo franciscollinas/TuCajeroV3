@@ -16,6 +16,7 @@ declare global {
       onUpdateError: (callback: (error: string) => void) => void;
       onUpdateProgress: (callback: (progress: { percent: number; bytesPerSecond: number; total: number; transferred: number }) => void) => void;
       onUpdateDownloaded: (callback: () => void) => void;
+      onCashSessionClosed: (callback: (info: { sessionIds: number[] }) => void) => () => void;
       downloadUpdate: () => Promise<{ success: boolean }>;
       installUpdate: () => Promise<{ success: boolean }>;
       openFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;

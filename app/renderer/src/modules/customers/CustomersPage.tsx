@@ -180,6 +180,7 @@ export default function CustomersPage(): JSX.Element {
       await loadCustomers(searchQuery);
     } catch (err) {
       rendererLogger.error('CustomersPage', 'Error saving customer:', err);
+      alert(err instanceof Error ? err.message : 'No se pudo guardar el cliente.');
     } finally {
       setFormLoading(false);
     }
@@ -206,6 +207,7 @@ export default function CustomersPage(): JSX.Element {
       }
     } catch (err) {
       rendererLogger.error('CustomersPage', 'Error paying debt:', err);
+      alert(err instanceof Error ? err.message : 'No se pudo registrar el abono.');
     } finally {
       setPayLoading(false);
     }

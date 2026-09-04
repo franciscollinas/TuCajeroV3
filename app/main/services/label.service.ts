@@ -3,8 +3,9 @@ import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import PDFDocument from 'pdfkit';
 import { getDatabase, schema } from '../db';
 import { eq, and } from 'drizzle-orm';
+import { getLabelsDir } from '../utils/paths';
 
-const LABELS_DIR = join(process.cwd(), 'exports', 'labels');
+const LABELS_DIR = getLabelsDir();
 
 interface LabelProduct {
   id: number;

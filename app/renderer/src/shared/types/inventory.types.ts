@@ -88,6 +88,7 @@ export interface BulkImportRow {
   criticalStock?: string;
   expiryDate?: string | null;
   location?: string | null;
+  taxRate?: string;
 }
 
 export interface BulkImportError {

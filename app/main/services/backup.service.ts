@@ -2,9 +2,10 @@ import { readdirSync, copyFileSync, unlinkSync, existsSync, mkdirSync, statSync 
 import { join, extname, resolve } from 'path';
 import { closeDatabase, getDatabase } from '../db';
 import { nowISO, toFileDate } from '../utils/date';
+import { getDatabasePath, getBackupsDir } from '../utils/paths';
 
-const DB_PATH = process.env.DATABASE_URL || './database/tucajero.db';
-const BACKUP_DIR = join(process.cwd(), 'backups');
+const DB_PATH = getDatabasePath();
+const BACKUP_DIR = getBackupsDir();
 
 export interface BackupEntry {
   id: string;
@@ -104,6 +105,13 @@ export class BackupService {
 
     closeDatabase();
     try {
+      // SQLite conserva transacciones pendientes en estos archivos cuando usa
+      // WAL. Deben eliminarse antes de reemplazar la base para que un WAL de
+      // la instalación actual no se reproduzca sobre el respaldo restaurado.
+      for (const suffix of ['-wal', '-shm']) {
+        const sidecar = `${DB_PATH}${suffix}`;
+        if (existsSync(sidecar)) unlinkSync(sidecar);
+      }
       copyFileSync(backupPath, DB_PATH);
     } finally {
       getDatabase();

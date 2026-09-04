@@ -3,8 +3,10 @@ import { Link, useLocation } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext';
 import { useConfig } from '../context/ConfigContext';
+import { useLicense } from '../context/LicenseContext';
 import { useRBAC } from '../hooks/useRBAC';
 import { useNotifications } from '../hooks/useNotifications';
+import { useCashAutoClose } from '../hooks/useCashAutoClose';
 import type { Permission } from '../hooks/useRBAC';
 import { es } from '../i18n';
 import { AboutModal } from './AboutModal';
@@ -17,18 +19,20 @@ const P = {
   SALES_HISTORY: '/sales/history', CUSTOMERS: '/customers', CASH: '/cash',
   REPORTS: '/reports', USERS: '/users', AUDIT: '/audit', BACKUP: '/backup',
   LICENSE: '/license', PAYROLL: '/payroll', QUOTES: '/quotes', PRINTER: '/printer', SETTINGS: '/settings',
-  INVENTORY_IMPORT: '/inventory/import', PURCHASE: '/purchase',
+  INVENTORY_IMPORT: '/inventory/import', PURCHASE: '/purchase', BRANCHES: '/branches',
 };
 
 export function Layout({ children }: LayoutProps): JSX.Element {
   const { user, logout } = useAuth();
   const { config } = useConfig();
+  const { isTrial, licenseInfo } = useLicense();
   const { can } = useRBAC();
   const location = useLocation();
   const [aboutOpen, setAboutOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(window.innerWidth <= 1024);
 
   useNotifications();
+  useCashAutoClose();
 
   const handleLogout = async () => { await logout(); };
 
@@ -57,6 +61,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
             { icon: reportsIcon, label: es.reports.title, path: P.REPORTS },
             { icon: auditIcon, label: es.audit.title, path: P.AUDIT, permission: 'audit:view' },
             { icon: usersIcon, label: es.users.title, path: P.USERS, permission: 'users:all' },
+            { icon: purchaseIcon, label: 'Sucursales', path: P.BRANCHES, permission: 'users:all' },
             { icon: backupIcon, label: es.backup.title, path: P.BACKUP, permission: 'backup:all' },
             { icon: licenseIcon, label: es.license.title, path: P.LICENSE },
             { icon: payrollIcon, label: es.payroll.title, path: P.PAYROLL },
@@ -96,6 +101,18 @@ export function Layout({ children }: LayoutProps): JSX.Element {
             </div>
           ))}
         </nav>
+        {isTrial && !isCollapsed && (
+          <div style={{ padding: '0 var(--space-4)', marginTop: 'var(--space-4)' }}>
+            <div style={{ background: 'rgba(52, 211, 153, 0.1)', border: '1px solid rgba(52, 211, 153, 0.2)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', color: '#059669' }}>
+              <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', marginBottom: '4px' }}>
+                {es.license.trialBadge}
+              </div>
+              <div style={{ fontSize: '13px', fontWeight: 700 }}>
+                {licenseInfo?.trial.trialRemainingHours}{es.license.trialHours} {licenseInfo?.trial.trialRemainingMinutes}{es.license.trialMinutes} restantes
+              </div>
+            </div>
+          </div>
+        )}
         <div className="tc-sidebar-user">
           <div className="tc-user-avatar">{initials}</div>
           {!isCollapsed && (
@@ -159,6 +176,7 @@ function pageTitle(path: string): string {
     [P.PAYROLL]: es.payroll.title, [P.QUOTES]: es.quote.title,
     [P.PRINTER]: es.settings.printer.title, [P.SETTINGS]: 'Configuración',
     [P.INVENTORY_IMPORT]: es.inventory.bulkImport, [P.PURCHASE]: 'Proveedores',
+    [P.BRANCHES]: 'Sucursales',
   };
   return map[path] ?? es.dashboard.title;
 }

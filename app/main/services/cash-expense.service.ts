@@ -16,13 +16,17 @@ export class CashExpenseService {
     const db = getDatabase();
 
     const [session] = await db
-      .select({ id: schema.cashSessions.id, status: schema.cashSessions.status })
+      .select({ id: schema.cashSessions.id, status: schema.cashSessions.status, userId: schema.cashSessions.userId })
       .from(schema.cashSessions)
       .where(and(eq(schema.cashSessions.id, sessionId), eq(schema.cashSessions.accountId, accountId)))
       .limit(1);
 
     if (!session || session.status !== 'OPEN') {
       throw new AppError(ErrorCode.NO_OPEN_SESSION, 'No existe una caja abierta para registrar el egreso.');
+    }
+
+    if (session.userId !== userId) {
+      throw new AppError(ErrorCode.FORBIDDEN, 'No puede registrar egresos en la caja de otro usuario.');
     }
 
     if (amount <= 0) {
@@ -46,6 +50,19 @@ export class CashExpenseService {
       })
       .returning();
 
+    const cs = db
+      .select({ expectedCash: schema.cashSessions.expectedCash, initialCash: schema.cashSessions.initialCash })
+      .from(schema.cashSessions)
+      .where(eq(schema.cashSessions.id, sessionId))
+      .get();
+
+    if (cs) {
+      await db
+        .update(schema.cashSessions)
+        .set({ expectedCash: (cs.expectedCash ?? cs.initialCash) - amount })
+        .where(eq(schema.cashSessions.id, sessionId));
+    }
+
     return {
       id: expense.id,
       cashSessionId: expense.cashSessionId,
@@ -56,13 +73,17 @@ export class CashExpenseService {
     };
   }
 
-  async getExpensesBySession(sessionId: number, accountId: number): Promise<CashExpense[]> {
+  async getExpensesBySession(sessionId: number, accountId: number, userId?: number): Promise<CashExpense[]> {
     const db = getDatabase();
 
     const rows = await db
       .select()
       .from(schema.cashExpenses)
-      .where(and(eq(schema.cashExpenses.cashSessionId, sessionId), eq(schema.cashExpenses.accountId, accountId)))
+      .where(and(
+        eq(schema.cashExpenses.cashSessionId, sessionId),
+        eq(schema.cashExpenses.accountId, accountId),
+        ...(userId ? [eq(schema.cashExpenses.userId, userId)] : []),
+      ))
       .orderBy(desc(schema.cashExpenses.createdAt));
 
     return rows.map((r) => ({

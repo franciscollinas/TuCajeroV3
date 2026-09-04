@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Database, HardDrive, Upload, Download, Trash2, RefreshCw, ChevronRight, Clock } from 'lucide-react';
+import { Database, HardDrive, Upload, Download, Trash2, RefreshCw, ChevronRight, Clock, Import, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { trpc } from '../../trpc';
 import { es } from '../../shared/i18n';
 import { formatDateTime } from '../../shared/utils/formatters';
@@ -17,6 +17,22 @@ interface BackupEntry {
   valid: boolean;
 }
 
+interface MigrationDetection {
+  available: boolean;
+  path: string | null;
+  size: string | null;
+  alreadyMigrated: boolean;
+}
+
+interface MigrationReport {
+  migrated: boolean;
+  sourcePath: string;
+  backupPath: string;
+  accountId: number;
+  rows: Record<string, number>;
+  integrity: string;
+}
+
 export default function BackupPage(): JSX.Element {
   const [backups, setBackups] = useState<BackupEntry[]>([]);
   const [dbInfo, setDbInfo] = useState<{ path: string; size: string; lastBackup: string | null } | null>(null);
@@ -28,12 +44,29 @@ export default function BackupPage(): JSX.Element {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error'>('success');
+  const [migration, setMigration] = useState<MigrationDetection | null>(null);
+  const [migrationLoading, setMigrationLoading] = useState(true);
+  const [migrating, setMigrating] = useState(false);
+  const [migrationResult, setMigrationResult] = useState<MigrationReport | null>(null);
+  const [confirmMigration, setConfirmMigration] = useState(false);
 
   const showMessage = (text: string, type: 'success' | 'error') => {
     setMessage(text);
     setMessageType(type);
     setTimeout(() => setMessage(''), 4000);
   };
+
+  const fetchMigration = useCallback(async () => {
+    setMigrationLoading(true);
+    try {
+      const detection = await trpc.migration.detect.query();
+      setMigration(detection as MigrationDetection);
+    } catch {
+      setMigration(null);
+    } finally {
+      setMigrationLoading(false);
+    }
+  }, []);
 
   const fetchData = useCallback(async () => {
     try {
@@ -51,6 +84,22 @@ export default function BackupPage(): JSX.Element {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { fetchMigration(); }, [fetchMigration]);
+
+  const handleMigrate = async () => {
+    setMigrating(true);
+    setConfirmMigration(false);
+    try {
+      const result = await trpc.migration.importV2.mutate();
+      setMigrationResult(result as MigrationReport);
+      await fetchMigration();
+      showMessage('Migración completada correctamente.', 'success');
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : 'Error al migrar los datos.', 'error');
+    } finally {
+      setMigrating(false);
+    }
+  };
 
   const handleCreateBackup = async () => {
     setCreating(true);
@@ -162,6 +211,78 @@ export default function BackupPage(): JSX.Element {
         </LoadingButton>
       </div>
 
+      <Card title={es.backup.migrateTitle} subtitle={es.backup.migrateSubtitle}>
+        {migrationLoading ? (
+          <div className="flex items-center gap-2 py-2 text-sm text-gray-500">
+            <LoadingSpinner size={16} />
+            {es.backup.migrateLoading}
+          </div>
+        ) : migration?.alreadyMigrated ? (
+          <div className="flex items-start gap-3">
+            <CheckCircle2 size={20} className="text-emerald-500 mt-0.5 shrink-0" />
+            <div className="text-sm text-gray-700">{es.backup.migrateAlreadyDone}</div>
+          </div>
+        ) : migration?.available && migration.path ? (
+          <div className="space-y-3">
+            <div className="flex items-start gap-3">
+              <Import size={20} className="text-indigo-500 mt-0.5 shrink-0" />
+              <div className="text-sm">
+                <p className="font-medium text-gray-800">{es.backup.migrateFound}</p>
+                <p className="text-gray-500 mt-0.5">
+                  <span className="font-medium">{es.backup.migratePath}:</span>{' '}
+                  <span className="font-mono text-xs">{migration.path}</span>
+                  {migration.size ? <span className="ml-2 text-xs font-semibold text-gray-400">({migration.size})</span> : null}
+                </p>
+              </div>
+            </div>
+            <div>
+              <LoadingButton onClick={() => setConfirmMigration(true)} loading={migrating} disabled={migrating}>
+                <Download size={16} />
+                {migrating ? es.backup.importing : es.backup.migrateButton}
+              </LoadingButton>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={20} className="text-amber-500 mt-0.5 shrink-0" />
+            <div className="text-sm text-gray-700">{es.backup.migrateNotFound}</div>
+          </div>
+        )}
+
+        {migrationResult ? (
+          <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+            <p className="text-sm font-semibold text-gray-800 mb-2">{es.backup.migrateDone}</p>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-700">
+              <div>
+                <span className="text-gray-500">{es.backup.migrateAccount}:</span>{' '}
+                <span className="font-semibold">{migrationResult.accountId}</span>
+              </div>
+              <div>
+                <span className="text-gray-500">{es.backup.migrateIntegrity}:</span>{' '}
+                <span className="font-semibold text-emerald-600">{migrationResult.integrity}</span>
+              </div>
+              <div className="col-span-2">
+                <span className="text-gray-500">{es.backup.migrateBackup}:</span>{' '}
+                <span className="font-mono text-xs">{migrationResult.backupPath}</span>
+              </div>
+            </div>
+            {Object.keys(migrationResult.rows).length > 0 && (
+              <>
+                <p className="text-sm font-semibold text-gray-800 mt-3 mb-1">{es.backup.migrateRows}</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1 text-sm">
+                  {Object.entries(migrationResult.rows).map(([table, count]) => (
+                    <div key={table} className="flex justify-between gap-2">
+                      <span className="text-gray-500">{table}</span>
+                      <span className="font-semibold text-gray-800">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        ) : null}
+      </Card>
+
       <Card title={es.backup.backupList}>
         {backups.length > 0 ? (
           <div className="overflow-x-auto border border-gray-200 rounded-lg">
@@ -243,6 +364,17 @@ export default function BackupPage(): JSX.Element {
         confirmLabel={es.backup.delete}
         variant="danger"
         loading={!!deleting}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmMigration}
+        onClose={() => setConfirmMigration(false)}
+        onConfirm={handleMigrate}
+        title={es.backup.migrateTitle}
+        message={es.backup.migrateConfirm}
+        confirmLabel={es.backup.migrateButton}
+        variant="warning"
+        loading={migrating}
       />
     </div>
   );

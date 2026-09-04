@@ -2,17 +2,20 @@ import { ipcMain, shell, Notification } from 'electron';
 import { appRouter } from './index';
 import { AuthService, AuthUser } from '../services/auth.service';
 import { logger } from '../utils/logger';
+import { toApiError } from '../utils/errors';
+import { getAppDataDir } from '../utils/paths';
 import { downloadUpdate, installUpdate } from '../updater';
-import { resolve } from 'path';
+import { resolve, sep } from 'path';
 
 const ALLOWED_OPEN_DIRS = ['exports', 'invoices', 'build', 'release'];
 
 function isPathAllowed(filePath: string): boolean {
   try {
     const resolved = resolve(filePath);
+    const baseDir = getAppDataDir();
     return ALLOWED_OPEN_DIRS.some((dir) => {
-      const dirPath = resolve(process.cwd(), dir);
-      return resolved.startsWith(dirPath);
+      const dirPath = resolve(baseDir, dir);
+      return resolved === dirPath || resolved.startsWith(dirPath + sep);
     });
   } catch {
     return false;
@@ -28,13 +31,13 @@ export const ALLOWED_PROCEDURE_PATHS = new Set<string>([
   'inventory.create', 'inventory.update', 'inventory.delete', 'inventory.adjustStock',
   'inventory.getStockAlerts', 'inventory.getExpiryAlerts', 'inventory.getNoRotation', 'inventory.bulkImport',
   'cash.getActive', 'cash.getTodaySalesTotal', 'cash.getTodayExpenses', 'cash.listExpenses',
-  'cash.listClosures', 'cash.getTodayPaymentsByMethod', 'cash.open', 'cash.close', 'cash.createExpense',
+  'cash.listClosures', 'cash.getTodayPaymentsByMethod', 'cash.open', 'cash.close', 'cash.createExpense', 'cash.touchActivity',
   'customers.search', 'customers.create', 'customers.update', 'customers.getHistory',
   'customers.getDebts', 'customers.payDebt',
   'sales.create', 'sales.getById', 'sales.getByNumber', 'sales.getByCashRegister',
   'sales.getByUser', 'sales.getByDateRange', 'sales.cancel', 'sales.getDashboardSummary', 'sales.generateInvoice',
   'users.list', 'users.create', 'users.update', 'users.toggleActive', 'users.getStats',
-  'config.getBusiness', 'config.setBusiness', 'config.getAll', 'config.getPrinter', 'config.setPrinter', 'config.testPrinter',
+  'config.getBusiness', 'config.setBusiness', 'config.getAll', 'config.getPrinter', 'config.setPrinter', 'config.testPrinter', 'config.listPrinters', 'config.printReceipt',
   'purchase.orders.list', 'purchase.orders.getById', 'purchase.orders.create', 'purchase.orders.updateStatus',
   'purchase.orders.receiveItems', 'purchase.orders.delete', 'purchase.orders.summary',
   'purchase.suppliers.list', 'purchase.suppliers.create', 'purchase.suppliers.update', 'purchase.suppliers.delete',
@@ -45,6 +48,7 @@ export const ALLOWED_PROCEDURE_PATHS = new Set<string>([
   'labels.generate',
   'payroll.getPayroll',
   'backup.list', 'backup.create', 'backup.restore', 'backup.delete', 'backup.dbInfo',
+  'migration.detect', 'migration.importV2',
   'license.getStatus', 'license.getFingerprint', 'license.activate',
 ]);
 
@@ -100,9 +104,7 @@ export function registerIpc(): void {
       return { success: true, data: result };
     } catch (err) {
       logger.error({ err, path }, 'tRPC query failed');
-      const message = err instanceof Error ? err.message : 'Error interno';
-      const code = err instanceof Error && 'code' in err ? (err as Error & { code?: string }).code : 'INTERNAL_ERROR';
-      return { success: false, error: { code: code || 'INTERNAL_ERROR', message } };
+      return { success: false, error: toApiError(err) };
     }
   });
 
@@ -123,9 +125,7 @@ export function registerIpc(): void {
       return { success: true, data: result };
     } catch (err) {
       logger.error({ err, path }, 'tRPC mutation failed');
-      const message = err instanceof Error ? err.message : 'Error interno';
-      const code = err instanceof Error && 'code' in err ? (err as Error & { code?: string }).code : 'INTERNAL_ERROR';
-      return { success: false, error: { code: code || 'INTERNAL_ERROR', message } };
+      return { success: false, error: toApiError(err) };
     }
   });
 

@@ -1,11 +1,19 @@
 import { createHmac, createHash, timingSafeEqual } from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { app } from 'electron';
 import si from 'systeminformation';
 import { eq } from 'drizzle-orm';
 import { getDatabase, schema } from '../db';
 import { nowISO } from '../utils/date';
 import { AppError, ErrorCode } from '../utils/errors';
 
-const LICENSE_SECRET: string = process.env.LICENSE_SECRET ?? (() => { throw new Error('LICENSE_SECRET environment variable is required.'); })();
+// Secreto de firma de licencias. Se inyecta vía entorno (LICENSE_SECRET); sin él
+// las licencias no se validan (fail closed), por lo que no es posible
+// falsificarlas usando un secreto conocido incrustado en el binario.
+const LICENSE_SECRET: string | undefined = process.env.LICENSE_SECRET;
+
+const TRIAL_MS = 24 * 60 * 60 * 1000;
 
 export interface HardwareFingerprint {
   cpuInfo: string;
@@ -28,7 +36,25 @@ export interface LicenseValidation {
   daysRemaining?: number;
 }
 
+export interface LicenseTrialState {
+  firstRunDate: string | null;
+  trialRemainingHours: number;
+  trialRemainingMinutes: number;
+  trialRemainingSeconds: number;
+  trialActive: boolean;
+  trialBlocked: boolean;
+}
+
+export interface LicenseStatus {
+  status: 'valid' | 'invalid' | 'none';
+  license: LicenseData | null;
+  validation: LicenseValidation | null;
+  trial: LicenseTrialState;
+}
+
 export class LicenseService {
+  private static legacyImportTried = false;
+
   private async getCPUInfo(): Promise<string> {
     const cpu = await si.cpu();
     return `${cpu.manufacturer}|${cpu.brand}|${cpu.cores}`;
@@ -118,6 +144,10 @@ export class LicenseService {
   }
 
   validateLicense(license: LicenseData, currentFingerprint: string): LicenseValidation {
+    if (!LICENSE_SECRET) {
+      return { valid: false, reason: 'No hay un secreto de licencia configurado (LICENSE_SECRET).' };
+    }
+
     if (!this.safeStringCompare(license.fingerprint, currentFingerprint)) {
       return { valid: false, reason: 'El fingerprint no coincide con este equipo.' };
     }
@@ -149,26 +179,125 @@ export class LicenseService {
     const bufA = Buffer.from(a || '', 'utf8');
     const bufB = Buffer.from(b || '', 'utf8');
     if (bufA.length !== bufB.length) {
-      const maxLen = Math.max(bufA.length, bufB.length);
-      for (let i = 0; i < maxLen; i++) {
-        /* constant-time comparison intentionally removed; lengths differ -> not equal */
-      }
       return false;
     }
     return timingSafeEqual(bufA, bufB);
   }
 
-  async getLicenseStatus(): Promise<{ status: 'valid' | 'invalid' | 'none'; license: LicenseData | null; validation: LicenseValidation | null }> {
-    const stored = await this.getStoredLicense();
-    if (!stored) {
-      return { status: 'none', license: null, validation: null };
+  private async getTrialState(): Promise<LicenseTrialState> {
+    const db = getDatabase();
+    const rows = await db
+      .select()
+      .from(schema.configs)
+      .where(eq(schema.configs.key, 'first_run_at'))
+      .limit(1);
+
+    let firstRunDate: string;
+    if (rows[0]) {
+      firstRunDate = rows[0].value;
+    } else {
+      firstRunDate = nowISO();
+      await db
+        .insert(schema.configs)
+        .values({ key: 'first_run_at', value: firstRunDate, updatedAt: nowISO() });
     }
-    const hw = await this.generateFingerprint();
-    const validation = this.validateLicense(stored, hw.fingerprint);
+
+    const firstRun = new Date(firstRunDate);
+    const elapsed = Date.now() - firstRun.getTime();
+    const expired = Number.isNaN(firstRun.getTime()) || elapsed >= TRIAL_MS;
+
+    if (expired) {
+      return {
+        firstRunDate,
+        trialRemainingHours: 0,
+        trialRemainingMinutes: 0,
+        trialRemainingSeconds: 0,
+        trialActive: false,
+        trialBlocked: true,
+      };
+    }
+
+    const remaining = TRIAL_MS - elapsed;
     return {
-      status: validation.valid ? 'valid' : 'invalid',
-      license: stored,
+      firstRunDate,
+      trialRemainingHours: Math.floor(remaining / (1000 * 60 * 60)),
+      trialRemainingMinutes: Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60)),
+      trialRemainingSeconds: Math.floor((remaining % (1000 * 60)) / 1000),
+      trialActive: true,
+      trialBlocked: false,
+    };
+  }
+
+  private getLegacyLicensePaths(): string[] {
+    // `app` solo existe dentro del runtime de Electron; en tests/run-as-node
+    // (ELECTRON_RUN_AS_NODE) el módulo 'electron' no expone la API de la app.
+    const appData = typeof app?.getPath === 'function' ? app.getPath('appData') : '';
+    if (!appData) return [];
+    return [path.join(appData, 'tucajero', 'license.dat'), path.join(appData, 'TuCajero', 'license.dat')];
+  }
+
+  private async importLegacyLicenseIfPresent(): Promise<void> {
+    if (LicenseService.legacyImportTried) return;
+    LicenseService.legacyImportTried = true;
+
+    if (await this.getStoredLicense()) return;
+
+    for (const filePath of this.getLegacyLicensePaths()) {
+      let raw: string;
+      try {
+        raw = fs.readFileSync(filePath, 'utf8');
+      } catch {
+        continue;
+      }
+
+      let license: LicenseData;
+      try {
+        license = JSON.parse(raw) as LicenseData;
+      } catch {
+        continue;
+      }
+
+      if (!license.fingerprint || !license.expiryDate || !license.signature) continue;
+
+      const hw = await this.generateFingerprint();
+      if (!this.validateLicense(license, hw.fingerprint).valid) continue;
+
+      const db = getDatabase();
+      await db
+        .insert(schema.configs)
+        .values({ key: 'license_data', value: JSON.stringify(license), updatedAt: nowISO() });
+      return;
+    }
+  }
+
+  async getLicenseStatus(): Promise<LicenseStatus> {
+    await this.importLegacyLicenseIfPresent();
+
+    const stored = await this.getStoredLicense();
+    let status: 'valid' | 'invalid' | 'none';
+    let license: LicenseData | null = null;
+    let validation: LicenseValidation | null = null;
+
+    if (stored) {
+      license = stored;
+      const hw = await this.generateFingerprint();
+      validation = this.validateLicense(stored, hw.fingerprint);
+      status = validation.valid ? 'valid' : 'invalid';
+    } else {
+      status = 'none';
+    }
+
+    const trial = await this.getTrialState();
+    const valid = status === 'valid';
+    return {
+      status,
+      license,
       validation,
+      trial: {
+        ...trial,
+        trialActive: !valid && trial.trialActive,
+        trialBlocked: !valid && trial.trialBlocked,
+      },
     };
   }
 }

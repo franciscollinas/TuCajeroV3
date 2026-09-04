@@ -16,7 +16,7 @@ import type { BulkImportRow, BulkImportResult } from '../../shared/types/invento
 type CsvRow = Record<string, string>;
 type PreviewRow = BulkImportRow & { _valid: boolean; _errors: string[] };
 
-const EXPECTED_HEADERS = ['code', 'barcode', 'name', 'description', 'category', 'categoryColor', 'price', 'cost', 'stock', 'minStock', 'criticalStock', 'expiryDate', 'location'];
+const EXPECTED_HEADERS = ['code', 'barcode', 'name', 'description', 'category', 'categoryColor', 'price', 'cost', 'taxRate', 'stock', 'minStock', 'criticalStock', 'expiryDate', 'location'];
 
 function parseCSV(text: string): CsvRow[] {
   const lines: string[] = [];
@@ -95,6 +95,7 @@ function validatePreviewRows(rows: CsvRow[]): PreviewRow[] {
       criticalStock: r.criticalStock ?? '0',
       expiryDate: r.expiryDate ?? '',
       location: r.location ?? '',
+      taxRate: r.taxRate ?? '',
       _valid: errors.length === 0,
       _errors: errors,
     };
@@ -184,6 +185,7 @@ export default function InventoryBulkImportPage(): JSX.Element {
         criticalStock: r.criticalStock,
         expiryDate: r.expiryDate || null,
         location: r.location || null,
+        taxRate: r.taxRate || undefined,
       }));
 
       const importResult = await trpc.inventory.bulkImport.mutate({ products, userId: user.id });
@@ -197,7 +199,7 @@ export default function InventoryBulkImportPage(): JSX.Element {
 
   const handleDownloadExample = () => {
     const headers = EXPECTED_HEADERS.join(',');
-    const example = `${headers}\nP001,,Producto de ejemplo,,General,,25000,15000,10,5,2,2026-12-31,Bodega A`;
+    const example = `${headers}\nP001,,Producto de ejemplo,,General,,25000,15000,19,10,5,2,2026-12-31,Bodega A`;
     const blob = new Blob(['\uFEFF' + example], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -216,6 +218,7 @@ export default function InventoryBulkImportPage(): JSX.Element {
     { key: 'category', header: es.inventory.category },
     { key: 'price', header: es.inventory.price, render: (r) => r.price },
     { key: 'cost', header: es.inventory.cost, render: (r) => r.cost },
+    { key: 'taxRate', header: es.inventory.tax, render: (r) => r.taxRate },
     { key: 'stock', header: es.inventory.stock, render: (r) => r.stock },
     {
       key: 'status',
@@ -419,6 +422,7 @@ export default function InventoryBulkImportPage(): JSX.Element {
                       {h === 'categoryColor' && 'Hex color opcional'}
                       {h === 'price' && '*'}
                       {h === 'cost' && '*'}
+                      {h === 'taxRate' && '% IVA (ej: 19)'}
                       {h === 'stock' && 'Opcional'}
                       {h === 'minStock' && 'Opcional'}
                       {h === 'criticalStock' && 'Opcional'}

@@ -33,6 +33,11 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('update:downloaded', listener);
     return () => ipcRenderer.removeListener('update:downloaded', listener);
   },
+  onCashSessionClosed: (callback: (info: { sessionIds: number[] }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, info: { sessionIds: number[] }) => callback(info);
+    ipcRenderer.on('cash:session-closed', listener);
+    return () => ipcRenderer.removeListener('cash:session-closed', listener);
+  },
   downloadUpdate: () => ipcRenderer.invoke('update:download'),
   installUpdate: () => ipcRenderer.invoke('update:install'),
   openFile: (filePath: string) => ipcRenderer.invoke('file:open', filePath),

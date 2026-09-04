@@ -18,6 +18,7 @@ interface CashState {
   openCash: (userId: number, initialCash: number, branchId?: number) => Promise<void>;
   closeCash: (id: number, finalCash: number, userId: number) => Promise<void>;
   addExpense: (sessionId: number, userId: number, amount: number, reason: string) => Promise<void>;
+  touchActivity: () => Promise<void>;
   clearSession: () => void;
 }
 
@@ -87,6 +88,14 @@ export const useCashStore = create<CashState>((set, get) => ({
   addExpense: async (sessionId, userId, amount, reason) => {
     await trpc.cash.createExpense.mutate({ sessionId, userId, amount, reason });
     await get().fetchExpenses(sessionId);
+  },
+
+  touchActivity: async () => {
+    try {
+      await trpc.cash.touchActivity.mutate({});
+    } catch (err) {
+      rendererLogger.error('CashStore', 'touchActivity failed:', err);
+    }
   },
 
   clearSession: () =>

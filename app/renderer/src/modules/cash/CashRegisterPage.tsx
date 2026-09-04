@@ -127,6 +127,7 @@ export default function CashRegisterPage(): JSX.Element {
       setPaymentsByMethod(payments as Record<string, number>);
     } catch (err) {
       rendererLogger.error('CashRegisterPage', 'Error opening cash:', err);
+      alert(err instanceof Error ? err.message : 'No se pudo abrir la caja.');
     } finally {
       setCashLoading(false);
     }
@@ -146,6 +147,7 @@ export default function CashRegisterPage(): JSX.Element {
       setClosures(closuresList as CashClosureRow[]);
     } catch (err) {
       rendererLogger.error('CashRegisterPage', 'Error closing cash:', err);
+      alert(err instanceof Error ? err.message : 'No se pudo cerrar la caja.');
     } finally {
       setCashLoading(false);
     }
@@ -194,7 +196,7 @@ export default function CashRegisterPage(): JSX.Element {
     }
   };
 
-  const expectedCash = session ? session.initialCash + todaySales - todayExpenses : 0;
+  const expectedCash = session ? (session.expectedCash ?? session.initialCash) : 0;
 
   const expenseColumns: Column<CashExpense>[] = [
     { key: 'reason', header: 'Razón' },
@@ -292,7 +294,7 @@ export default function CashRegisterPage(): JSX.Element {
                   </div>
                   <div className="bg-green-50 rounded-xl p-4">
                     <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Actual</p>
-                    <p className="text-xl font-bold text-green-700">{formatCurrency(session.initialCash + todaySales - todayExpenses)}</p>
+                    <p className="text-xl font-bold text-green-700">{formatCurrency(expectedCash)}</p>
                   </div>
                 </div>
 
@@ -532,7 +534,7 @@ export default function CashRegisterPage(): JSX.Element {
                   </div>
                   <div>
                     <p className="text-xs text-gray-500">Efectivo en caja</p>
-                    <p className="text-lg font-bold text-gray-900">{formatCurrency(session.initialCash + todaySales - todayExpenses)}</p>
+                    <p className="text-lg font-bold text-gray-900">{formatCurrency(expectedCash)}</p>
                   </div>
                 </div>
               </div>

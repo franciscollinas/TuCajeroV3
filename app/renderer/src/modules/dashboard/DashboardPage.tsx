@@ -1,10 +1,10 @@
 import { rendererLogger } from '../../shared/utils/rendererLogger';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   TrendingUp, AlertTriangle, Package, ShoppingCart, Calendar,
   Lock, Unlock, BarChart3, PieChart, List, ChevronRight,
-  DollarSign, Clock, Award,
+  ChevronDown, DollarSign, Award,
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -45,6 +45,7 @@ export default function DashboardPage(): JSX.Element {
   const [finalCash, setFinalCash] = useState('');
   const [showCloseInput, setShowCloseInput] = useState(false);
   const [dashboardPeriod, setDashboardPeriod] = useState<'week' | 'month'>('month');
+  const [expandedSales, setExpandedSales] = useState<Set<number>>(new Set());
 
   const { session: activeCash, fetchSession, fetchTodayTotals } = useCashStore();
   const { fetchAlerts } = useAlertStore();
@@ -112,6 +113,15 @@ export default function DashboardPage(): JSX.Element {
       setCashLoading(false);
     }
   }, [activeCash, finalCash, user]);
+
+  const toggleSaleExpand = useCallback((id: number): void => {
+    setExpandedSales((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   const { stockAlerts, expiryAlerts } = useAlertStore();
   const stockCritical = stockAlerts?.critical.length ?? 0;
@@ -343,6 +353,90 @@ export default function DashboardPage(): JSX.Element {
         </Card>
       </div>
 
+      {/* ── Recent Sales Table ── */}
+      <Card title={es.dashboard.recentSales}>
+        {summary?.recentSales && summary.recentSales.length > 0 ? (
+          <div className="overflow-x-auto border border-gray-200 rounded-lg">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr>
+                  <th className="w-8 px-2 py-3 bg-gray-50 border-b border-gray-200" />
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">{es.sales.saleNumber}</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">{es.audit.date}</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">Cliente</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">{es.sales.itemsCount}</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">{es.sales.totalLabel}</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">{es.sales.payment}</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">{es.sales.statusLabel}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.recentSales.map((sale) => {
+                  const isExpanded = expandedSales.has(sale.id);
+                  return (
+                    <Fragment key={sale.id}>
+                      <tr
+                        className={`cursor-pointer transition-colors ${isExpanded ? 'bg-indigo-50/60' : 'hover:bg-gray-50'}`}
+                        onClick={() => toggleSaleExpand(sale.id)}
+                      >
+                        <td className="px-2 py-3 border-b border-gray-100">
+                          <button
+                            type="button"
+                            onClick={() => toggleSaleExpand(sale.id)}
+                            className="inline-flex items-center justify-center w-6 h-6 rounded-md text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                            aria-label={isExpanded ? 'Ocultar productos' : 'Ver productos'}
+                          >
+                            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium text-indigo-600 border-b border-gray-100 whitespace-nowrap">{sale.saleNumber}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700 border-b border-gray-100 whitespace-nowrap">{formatDateTime(sale.createdAt)}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700 border-b border-gray-100">{sale.customer?.name ?? '\u2014'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700 border-b border-gray-100">
+                          <span className="inline-flex items-center gap-1"><Package size={13} className="text-gray-400" />{sale.items.reduce((sum, i) => sum + i.quantity, 0)}</span>
+                        </td>
+                        <td className="px-4 py-3 text-sm font-semibold text-gray-900 border-b border-gray-100 whitespace-nowrap">{formatCurrency(sale.total)}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700 border-b border-gray-100">
+                          <div className="flex gap-1 flex-wrap">
+                            {sale.payments.map((p) => (
+                              <StatusBadge key={p.id} status={p.method} label={PAYMENT_LABELS[p.method] ?? p.method} />
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 border-b border-gray-100"><StatusBadge status={sale.status} /></td>
+                      </tr>
+                      {isExpanded && (
+                        <tr className="bg-gray-50/70">
+                          <td className="px-2 py-3 border-b border-gray-100" />
+                          <td colSpan={7} className="px-4 py-4 border-b border-gray-100">
+                            <div className="flex flex-col gap-2">
+                              {sale.items.map((item) => (
+                                <div key={item.id} className="flex items-center justify-between gap-4 text-sm">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="text-indigo-300">•</span>
+                                    <span className="font-medium text-gray-700 truncate">{item.product.name}</span>
+                                  </div>
+                                  <div className="flex items-center gap-6 whitespace-nowrap">
+                                    <span className="text-gray-500">{item.quantity} × {formatCurrency(item.unitPrice)}</span>
+                                    <span className="font-semibold text-gray-900 w-20 text-right">{formatCurrency(item.total)}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState icon={List} title={es.sales.noSalesYet} className="py-8" />
+        )}
+      </Card>
+
       {/* ── Charts Row 2 ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top Products */}
@@ -384,89 +478,47 @@ export default function DashboardPage(): JSX.Element {
         {/* Top Categories */}
         <Card title={es.inventory.category}>
           {summary?.topCategories && summary.topCategories.length > 0 ? (
-            <div className="h-72">
+            <div className="h-44">
               <ResponsiveContainer width="100%" height="100%">
-                <RePieChart>
-                  <Pie data={summary.topCategories} cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={3} dataKey="value" nameKey="name">
-                    {summary.topCategories.map((_, i) => (
-                      <Cell key={i} fill={summary.topCategories[i]?.color ?? PIE_COLORS[i % PIE_COLORS.length]} />
-                    ))}
-                  </Pie>
+                <BarChart data={summary.topCategories} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }} formatter={(value: number) => [value, 'Productos']} />
-                  <Legend verticalAlign="bottom" height={36} formatter={(value: string) => <span className="text-sm text-gray-600">{value}</span>} />
-                </RePieChart>
+                  <Bar dataKey="value" radius={[4, 4, 0, 0]} name="Productos">
+                    {summary.topCategories.map((entry, index) => (
+                      <Cell key={index} fill={entry.color ?? PIE_COLORS[index % PIE_COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
             </div>
           ) : (
             <EmptyState icon={PieChart} title={es.common.noResults} className="py-8" />
           )}
+
+          {/* Sales by Payment Method (Bar) */}
+          {summary?.paymentMethods && summary.paymentMethods.length > 0 && (
+            <div className="mt-[15%] pt-6 border-t border-gray-100">
+              <h4 className="text-base font-semibold text-gray-700 mb-3">Ingresos por método de pago</h4>
+              <div className="h-44">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RePieChart>
+                    <Pie data={summary.paymentMethods} cx="50%" cy="50%" innerRadius={28} outerRadius={55} paddingAngle={3} dataKey="total" nameKey="label">
+                      {summary.paymentMethods.map((_, i) => (
+                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }} formatter={(value: number) => [formatCurrency(value), 'Total']} />
+                    <Legend verticalAlign="bottom" height={36} formatter={(value: string) => <span className="text-sm text-gray-600">{value}</span>} />
+                  </RePieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
         </Card>
       </div>
 
-      {/* ── Sales by Payment Method (Bar) ── */}
-      {summary?.paymentMethods && summary.paymentMethods.length > 0 && (
-        <Card title="Ingresos por método de pago">
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={summary.paymentMethods} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }} formatter={(value: number) => [formatCurrency(value), 'Total']} />
-                <Bar dataKey="total" radius={[4, 4, 0, 0]} name="total">
-                  {summary.paymentMethods.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      )}
-
-      {/* ── Recent Sales Table ── */}
-      <Card title={es.dashboard.recentSales}>
-        {summary?.recentSales && summary.recentSales.length > 0 ? (
-          <div className="overflow-x-auto border border-gray-200 rounded-lg">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">{es.sales.saleNumber}</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">{es.audit.date}</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">Cliente</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">{es.sales.itemsCount}</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">{es.sales.totalLabel}</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">{es.sales.payment}</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-200">{es.sales.statusLabel}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summary.recentSales.map((sale) => (
-                  <tr key={sale.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 text-sm font-medium text-indigo-600 border-b border-gray-100 whitespace-nowrap">{sale.saleNumber}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700 border-b border-gray-100 whitespace-nowrap">{formatDateTime(sale.createdAt)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700 border-b border-gray-100">{sale.customer?.name ?? '\u2014'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700 border-b border-gray-100">
-                      <span className="inline-flex items-center gap-1"><Package size={13} className="text-gray-400" />{sale.items.reduce((sum, i) => sum + i.quantity, 0)}</span>
-                    </td>
-                    <td className="px-4 py-3 text-sm font-semibold text-gray-900 border-b border-gray-100 whitespace-nowrap">{formatCurrency(sale.total)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700 border-b border-gray-100">
-                      <div className="flex gap-1 flex-wrap">
-                        {sale.payments.map((p) => (
-                          <StatusBadge key={p.id} status={p.method} label={PAYMENT_LABELS[p.method] ?? p.method} />
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 border-b border-gray-100"><StatusBadge status={sale.status} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <EmptyState icon={List} title={es.sales.noSalesYet} className="py-8" />
-        )}
-      </Card>
     </div>
   );
 }

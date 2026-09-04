@@ -1,5 +1,7 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import { z } from 'zod';
+import { parseLocalDateOnly } from '../utils/date';
+import { productCreateInputSchema, productUpdateInputSchema } from './inventory-schemas';
 
 import { AuthService, AuthUser } from '../services/auth.service';
 import { InventoryService } from '../services/inventory.service';
@@ -17,6 +19,7 @@ import { PayrollService } from '../services/payroll.service';
 import { PurchaseService } from '../services/purchase.service';
 import { QuoteService } from '../services/quote.service';
 import { BackupService } from '../services/backup.service';
+import { MigrationService } from '../services/migration.service';
 import { LicenseService } from '../services/license.service';
 import { PrinterService } from '../services/printer.service';
 import { DianService } from '../services/dian.service';
@@ -38,34 +41,13 @@ const payrollService = new PayrollService();
 const purchaseService = new PurchaseService();
 const quoteService = new QuoteService();
 const backupService = new BackupService();
+const migrationService = new MigrationService();
 const licenseService = new LicenseService();
 const printerService = new PrinterService();
 const dianService = new DianService();
 
-const loginAttempts = new Map<string, { count: number; lastAttempt: number }>();
 
-function checkRateLimit(key: string, maxAttempts = 5, windowMs = 15 * 60 * 1000): boolean {
-  const now = Date.now();
-  const entry = loginAttempts.get(key);
-  if (!entry || now - entry.lastAttempt > windowMs) {
-    loginAttempts.set(key, { count: 1, lastAttempt: now });
-    return true;
-  }
-  entry.count += 1;
-  entry.lastAttempt = now;
-  return entry.count <= maxAttempts;
-}
 
-function recordLoginAttempt(key: string, success: boolean): void {
-  const now = Date.now();
-  const entry = loginAttempts.get(key);
-  if (success) {
-    loginAttempts.delete(key);
-  } else if (entry) {
-    entry.count += 1;
-    entry.lastAttempt = now;
-  }
-}
 
 export const t = initTRPC.context<{ user: AuthUser | null }>().create({
   isServer: true,
@@ -97,6 +79,10 @@ function requireRole(...allowedRoles: UserRole[]) {
 const adminOnly = authenticatedProcedure.use(requireRole('ADMIN'));
 const adminOrSupervisor = authenticatedProcedure.use(requireRole('ADMIN', 'SUPERVISOR'));
 
+const moneyAmount = z.number().finite().min(0).max(999_999_999);
+const positiveMoney = z.number().finite().positive().max(999_999_999);
+const nonNegativeQty = z.number().finite().min(0).max(9_999_999);
+
 function requireAccountId(ctx: { user: AuthUser }): number {
   if (ctx.user.accountId == null) {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'La cuenta de usuario es requerida.' });
@@ -108,18 +94,13 @@ export const authRouter = t.router({
   login: t.procedure
     .input(z.object({ username: z.string().min(1).max(100), password: z.string().min(1).max(200) }))
     .mutation(async ({ input }) => {
-      const rateKey = `login:${input.username.toLowerCase()}`;
-      if (!checkRateLimit(rateKey)) {
-        throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Demasiados intentos. Intente más tarde.' });
-      }
       try {
         const result = await authService.login(input.username, input.password);
-        recordLoginAttempt(rateKey, true);
         return result;
       } catch (err) {
-        recordLoginAttempt(rateKey, false);
         const message = err instanceof Error ? err.message : 'Credenciales inválidas.';
-        throw new TRPCError({ code: 'UNAUTHORIZED', message });
+        const code = err instanceof TRPCError ? err.code : 'UNAUTHORIZED';
+        throw new TRPCError({ code, message });
       }
     }),
 
@@ -145,8 +126,7 @@ export const inventoryRouter = t.router({
   getAll: authenticatedProcedure
     .input(z.object({ search: z.string().optional(), categoryId: z.number().optional(), page: z.number().optional(), pageSize: z.number().optional() }).optional())
     .query(async ({ input, ctx }) => {
-      const result = await inventoryService.getAllProducts(input, requireAccountId(ctx));
-      return { products: result, total: result.length };
+      return inventoryService.getAllProducts(input, requireAccountId(ctx));
     }),
 
   getById: authenticatedProcedure
@@ -165,14 +145,14 @@ export const inventoryRouter = t.router({
     return inventoryService.getCategories(requireAccountId(ctx));
   }),
 
-  create: authenticatedProcedure
-    .input(z.object({ data: z.object({ code: z.string(), barcode: z.string().optional().nullable(), name: z.string(), description: z.string().optional().nullable(), categoryName: z.string().optional(), price: z.number(), cost: z.number(), stock: z.number(), minStock: z.number().optional(), criticalStock: z.number().optional(), taxRate: z.number().optional(), expiryDate: z.string().optional().nullable(), location: z.string().optional().nullable(), unitType: z.string().optional(), conversionFactor: z.number().optional(), userId: z.number() }) }))
+  create: adminOrSupervisor
+    .input(z.object({ data: productCreateInputSchema }))
     .mutation(async ({ input, ctx }) => {
       return inventoryService.createProduct(input.data, requireAccountId(ctx));
     }),
 
-  update: authenticatedProcedure
-    .input(z.object({ id: z.number(), data: z.object({ name: z.string().optional(), price: z.number().optional(), cost: z.number().optional(), categoryName: z.string().optional(), minStock: z.number().optional(), criticalStock: z.number().optional(), taxRate: z.number().optional(), expiryDate: z.string().optional().nullable(), location: z.string().optional().nullable() }) }))
+  update: adminOrSupervisor
+    .input(z.object({ id: z.number(), data: productUpdateInputSchema }))
     .mutation(async ({ input, ctx }) => {
       return inventoryService.updateProduct(input.id, input.data, requireAccountId(ctx));
     }),
@@ -183,8 +163,8 @@ export const inventoryRouter = t.router({
         return inventoryService.deleteProduct(input.id, requireAccountId(ctx));
       }),
 
-  adjustStock: authenticatedProcedure
-    .input(z.object({ productId: z.number(), quantity: z.number(), reason: z.string(), userId: z.number() }))
+  adjustStock: adminOrSupervisor
+    .input(z.object({ productId: z.number(), quantity: z.number().finite().min(-9_999_999).max(9_999_999), reason: z.string(), userId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       return inventoryService.adjustStock(input.productId, input.quantity, input.reason, ctx.user.id, requireAccountId(ctx));
     }),
@@ -208,7 +188,7 @@ export const inventoryRouter = t.router({
     }),
 
   bulkImport: adminOrSupervisor
-    .input(z.object({ products: z.array(z.object({ code: z.string(), barcode: z.string().optional().nullable(), name: z.string(), description: z.string().optional().nullable(), category: z.string(), categoryColor: z.string().optional().nullable(), price: z.string(), cost: z.string(), stock: z.string(), minStock: z.string().optional(), criticalStock: z.string().optional(), expiryDate: z.string().optional().nullable(), location: z.string().optional().nullable() })), userId: z.number(), branchId: z.number().optional() }))
+    .input(z.object({ products: z.array(z.object({ code: z.string(), barcode: z.string().optional().nullable(), name: z.string(), description: z.string().optional().nullable(), category: z.string(), categoryColor: z.string().optional().nullable(), taxRate: z.string().optional(), price: z.string(), cost: z.string(), stock: z.string(), minStock: z.string().optional(), criticalStock: z.string().optional(), expiryDate: z.string().optional().nullable(), location: z.string().optional().nullable() })), userId: z.number(), branchId: z.number().optional() }))
     .mutation(async ({ input, ctx }) => {
       return inventoryService.bulkImportProducts(input.products, ctx.user.id, input.branchId, requireAccountId(ctx));
     }),
@@ -236,13 +216,13 @@ export const cashRouter = t.router({
   listExpenses: authenticatedProcedure
     .input(z.object({ sessionId: z.number() }))
     .query(async ({ input, ctx }) => {
-      return cashExpenseService.getExpensesBySession(input.sessionId, requireAccountId(ctx));
+      return cashExpenseService.getExpensesBySession(input.sessionId, requireAccountId(ctx), ctx.user.role === 'CASHIER' ? ctx.user.id : undefined);
     }),
 
   listClosures: authenticatedProcedure
     .input(z.object({ branchId: z.number().optional() }).optional())
     .query(async ({ input, ctx }) => {
-      return cashSessionService.listCashClosures(requireAccountId(ctx), 60, input?.branchId);
+      return cashSessionService.listCashClosures(requireAccountId(ctx), 60, input?.branchId, ctx.user.role === 'CASHIER' ? ctx.user.id : undefined);
     }),
 
   getTodayPaymentsByMethod: authenticatedProcedure
@@ -252,21 +232,28 @@ export const cashRouter = t.router({
     }),
 
   open: authenticatedProcedure
-    .input(z.object({ userId: z.number(), initialCash: z.number(), branchId: z.number().optional() }))
+    .input(z.object({ userId: z.number(), initialCash: moneyAmount, branchId: z.number().optional() }))
     .mutation(async ({ input, ctx }) => {
       return cashSessionService.openCashSession(requireAccountId(ctx), ctx.user.id, input.initialCash, input.branchId);
     }),
 
   close: authenticatedProcedure
-    .input(z.object({ sessionId: z.number(), finalCash: z.number(), expectedCash: z.number() }))
+    .input(z.object({ sessionId: z.number(), finalCash: moneyAmount, expectedCash: moneyAmount }))
     .mutation(async ({ input, ctx }) => {
-      return cashSessionService.closeCashSession(input.sessionId, input.finalCash, input.expectedCash, requireAccountId(ctx));
+      return cashSessionService.closeCashSession(input.sessionId, input.finalCash, input.expectedCash, requireAccountId(ctx), ctx.user.id);
     }),
 
   createExpense: authenticatedProcedure
-    .input(z.object({ sessionId: z.number(), userId: z.number(), amount: z.number(), reason: z.string() }))
+    .input(z.object({ sessionId: z.number(), userId: z.number(), amount: moneyAmount, reason: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return cashExpenseService.createExpense(input.sessionId, ctx.user.id, input.amount, input.reason, requireAccountId(ctx));
+    }),
+
+  touchActivity: authenticatedProcedure
+    .input(z.object({ branchId: z.number().optional() }).optional())
+    .mutation(async ({ input, ctx }) => {
+      await cashSessionService.touchActivity(ctx.user.id, input?.branchId);
+      return { success: true };
     }),
 });
 
@@ -302,15 +289,15 @@ export const customerRouter = t.router({
     }),
 
   payDebt: authenticatedProcedure
-    .input(z.object({ debtId: z.number(), amount: z.number(), userId: z.number(), cashSessionId: z.number() }))
+    .input(z.object({ debtId: z.number(), amount: positiveMoney, userId: z.number(), cashSessionId: z.number().optional(), method: z.enum(['efectivo', 'nequi', 'daviplata', 'tarjeta', 'transferencia']).optional() }))
     .mutation(async ({ input, ctx }) => {
-      return customerService.payDebt(input.debtId, input.amount, ctx.user.id, input.cashSessionId, requireAccountId(ctx));
+      return customerService.payDebt(input.debtId, input.amount, ctx.user.id, input.cashSessionId ?? null, requireAccountId(ctx), input.method ?? 'efectivo');
     }),
 });
 
 export const salesRouter = t.router({
    create: authenticatedProcedure
-     .input(z.object({ cashSessionId: z.number(), userId: z.number(), items: z.array(z.object({ productId: z.number(), quantity: z.number().positive(), unitPrice: z.number().min(0), discount: z.number().min(0) })), payments: z.array(z.object({ method: z.enum(['efectivo', 'nequi', 'daviplata', 'tarjeta', 'transferencia', 'credito']), amount: z.number().positive(), reference: z.string().optional() })), discount: z.number().min(0).optional(), deliveryFee: z.number().min(0).optional(), customerId: z.number().optional(), branchId: z.number().optional(), isCreditSale: z.boolean().optional(), discountType: z.enum(["percentage", "fixed"]).optional() }))
+     .input(z.object({ cashSessionId: z.number(), userId: z.number(), items: z.array(z.object({ productId: z.number(), quantity: nonNegativeQty, unitPrice: moneyAmount, discount: moneyAmount })), payments: z.array(z.object({ method: z.enum(['efectivo', 'nequi', 'daviplata', 'tarjeta', 'transferencia', 'credito']), amount: positiveMoney, reference: z.string().optional() })), discount: moneyAmount.optional(), deliveryFee: moneyAmount.optional(), customerId: z.number().optional(), branchId: z.number().optional(), isCreditSale: z.boolean().optional(), discountType: z.enum(["percentage", "fixed"]).optional() }))
       .mutation(async ({ input, ctx }) => {
        return salesService.createSale(input.cashSessionId, ctx.user.id, input.items, input.payments, requireAccountId(ctx), input.discount, input.deliveryFee, input.customerId, input.isCreditSale ?? false, input.branchId, input.discountType ?? "percentage");
      }),
@@ -330,21 +317,21 @@ export const salesRouter = t.router({
   getByCashRegister: authenticatedProcedure
     .input(z.object({ cashSessionId: z.number() }))
     .query(async ({ input, ctx }) => {
-      return salesService.getSalesByCashRegister(input.cashSessionId, requireAccountId(ctx));
+      return salesService.getSalesByCashRegister(input.cashSessionId, requireAccountId(ctx), ctx.user.role === 'CASHIER' ? ctx.user.id : undefined);
     }),
 
   getByUser: authenticatedProcedure
     .input(z.object({ userId: z.number() }))
     .query(async ({ input, ctx }) => {
-      return salesService.getSalesByUser(input.userId, requireAccountId(ctx));
+      return salesService.getSalesByUser(ctx.user.role === 'CASHIER' ? ctx.user.id : input.userId, requireAccountId(ctx));
     }),
 
   getByDateRange: authenticatedProcedure
     .input(z.object({ startDate: z.string(), endDate: z.string(), branchId: z.number().optional() }).optional())
     .query(async ({ input, ctx }) => {
-      const start = input?.startDate ? new Date(input.startDate) : new Date();
-      const end = input?.endDate ? new Date(input.endDate) : new Date();
-      return salesService.getSalesByDateRange(start, end, requireAccountId(ctx), input?.branchId);
+      const start = input?.startDate ? parseLocalDateOnly(input.startDate) : new Date();
+      const end = input?.endDate ? parseLocalDateOnly(input.endDate) : new Date();
+      return salesService.getSalesByDateRange(start, end, requireAccountId(ctx), input?.branchId, ctx.user.role === 'CASHIER' ? ctx.user.id : undefined);
     }),
 
   cancel: adminOrSupervisor
@@ -415,20 +402,58 @@ export const configRouter = t.router({
     return configService.getAllFiltered(requireAccountId(ctx), ctx.user.role === 'ADMIN');
   }),
 
-  getPrinter: authenticatedProcedure.query(async () => {
-    return printerService.getConfig();
+  getPrinter: adminOnly.query(async ({ ctx }) => {
+    return printerService.getConfig(requireAccountId(ctx));
   }),
 
-  setPrinter: authenticatedProcedure
+  setPrinter: adminOnly
     .input(z.object({ printer: z.object({ type: z.enum(['USB', 'TCP', 'Windows']), paperWidth: z.number(), characterSet: z.string(), connectionString: z.string() }) }))
-    .mutation(async ({ input }) => {
-      return printerService.setConfig(input.printer);
+    .mutation(async ({ input, ctx }) => {
+      return printerService.setConfig(input.printer, requireAccountId(ctx));
     }),
 
-  testPrinter: authenticatedProcedure
+  testPrinter: adminOnly
     .input(z.object({ printer: z.object({ type: z.enum(['USB', 'TCP', 'Windows']), paperWidth: z.number(), characterSet: z.string(), connectionString: z.string() }) }))
     .mutation(async ({ input }) => {
       return printerService.testPrint(input.printer);
+    }),
+
+  listPrinters: adminOnly.query(async () => {
+    return printerService.listWindowsPrinters();
+  }),
+
+  printReceipt: authenticatedProcedure
+    .input(z.object({
+      sale: z.object({
+        saleNumber: z.string(),
+        total: z.number(),
+        subtotal: z.number(),
+        tax: z.number(),
+        discount: z.number(),
+        deliveryFee: z.number(),
+        change: z.number(),
+        createdAt: z.string(),
+        items: z.array(z.object({
+          productName: z.string().optional(),
+          product: z.object({ name: z.string() }).optional(),
+          quantity: z.number(),
+          unitPrice: z.number(),
+          total: z.number(),
+          discount: z.number(),
+        })),
+        payments: z.array(z.object({ method: z.string(), amount: z.number() })),
+        customer: z.object({ name: z.string() }).nullable().optional(),
+        user: z.object({ fullName: z.string() }).nullable().optional(),
+      }),
+      businessConfig: z.object({
+        businessName: z.string().optional(),
+        address: z.string().optional(),
+        phone: z.string().optional(),
+        nit: z.string().optional(),
+      }),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      return printerService.printReceipt(input.sale, input.businessConfig, requireAccountId(ctx));
     }),
 });
 
@@ -446,20 +471,20 @@ export const purchaseRouter = t.router({
         return purchaseService.getPurchaseOrderById(input.id, requireAccountId(ctx));
       }),
 
-    create: authenticatedProcedure
-      .input(z.object({ userId: z.number(), data: z.object({ supplierId: z.number(), items: z.array(z.object({ productId: z.number(), quantityOrdered: z.number(), unitCost: z.number() })), branchId: z.number().optional(), freight: z.number().optional(), expectedDate: z.string().optional(), notes: z.string().optional() }) }))
+    create: adminOrSupervisor
+      .input(z.object({ userId: z.number(), data: z.object({ supplierId: z.number(), items: z.array(z.object({ productId: z.number(), quantityOrdered: nonNegativeQty, unitCost: moneyAmount })), branchId: z.number().optional(), freight: moneyAmount.optional(), expectedDate: z.string().optional(), notes: z.string().optional() }) }))
       .mutation(async ({ input, ctx }) => {
         return purchaseService.createPurchaseOrder(ctx.user.id, input.data, requireAccountId(ctx));
       }),
 
-    updateStatus: authenticatedProcedure
+    updateStatus: adminOrSupervisor
       .input(z.object({ id: z.number(), status: z.enum(['DRAFT', 'CONFIRMED', 'SENT', 'RECEIVED', 'CANCELLED']) }))
       .mutation(async ({ input, ctx }) => {
         return purchaseService.updatePurchaseOrderStatus(input.id, input.status, requireAccountId(ctx));
       }),
 
-    receiveItems: authenticatedProcedure
-      .input(z.object({ id: z.number(), userId: z.number(), items: z.array(z.object({ orderItemId: z.number(), received: z.boolean(), quantityReceived: z.number(), observations: z.string().optional() })) }))
+    receiveItems: adminOrSupervisor
+      .input(z.object({ id: z.number(), userId: z.number(), items: z.array(z.object({ orderItemId: z.number(), received: z.boolean(), quantityReceived: nonNegativeQty, observations: z.string().optional() })) }))
       .mutation(async ({ input, ctx }) => {
         return purchaseService.receiveItems(input.id, ctx.user.id, input.items, requireAccountId(ctx));
       }),
@@ -480,19 +505,19 @@ export const purchaseRouter = t.router({
       return purchaseService.getAllSuppliers(requireAccountId(ctx));
     }),
 
-    create: authenticatedProcedure
+    create: adminOrSupervisor
       .input(z.object({ data: z.object({ name: z.string(), contactPerson: z.string().optional(), phone: z.string(), email: z.string().optional(), address: z.string().optional(), leadTimeDays: z.number().optional(), isActive: z.boolean().optional(), notes: z.string().optional() }) }))
       .mutation(async ({ input, ctx }) => {
         return purchaseService.createSupplier(input.data, requireAccountId(ctx));
       }),
 
-    update: authenticatedProcedure
+    update: adminOrSupervisor
       .input(z.object({ id: z.number(), data: z.object({ name: z.string().optional(), contactPerson: z.string().optional(), phone: z.string().optional(), email: z.string().optional(), address: z.string().optional(), leadTimeDays: z.number().optional(), isActive: z.boolean().optional(), notes: z.string().optional() }) }))
       .mutation(async ({ input, ctx }) => {
         return purchaseService.updateSupplier(input.id, input.data, requireAccountId(ctx));
       }),
 
-    delete: authenticatedProcedure
+    delete: adminOrSupervisor
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input, ctx }) => {
         return purchaseService.deleteSupplier(input.id, requireAccountId(ctx));
@@ -514,13 +539,13 @@ export const quoteRouter = t.router({
     }),
 
   create: authenticatedProcedure
-    .input(z.object({ userId: z.number(), items: z.array(z.object({ productId: z.number(), unitPrice: z.number(), quantity: z.number(), discount: z.number() })), customerId: z.number().optional(), discount: z.number().optional(), deliveryFee: z.number().optional(), notes: z.string().optional() }))
+    .input(z.object({ userId: z.number(), items: z.array(z.object({ productId: z.number(), unitPrice: moneyAmount, quantity: nonNegativeQty, discount: moneyAmount })), customerId: z.number().optional(), discount: moneyAmount.optional(), deliveryFee: moneyAmount.optional(), notes: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
-      return quoteService.create(ctx.user.id, requireAccountId(ctx), input.items, input.customerId, input.discount, input.deliveryFee, input.notes);
+      return quoteService.create(input.userId, requireAccountId(ctx), input.items, input.customerId, input.discount, input.deliveryFee, input.notes);
     }),
 
   update: authenticatedProcedure
-    .input(z.object({ id: z.number(), userId: z.number(), items: z.array(z.object({ productId: z.number(), unitPrice: z.number(), quantity: z.number(), discount: z.number() })), customerId: z.number().optional(), discount: z.number().optional(), deliveryFee: z.number().optional() }))
+    .input(z.object({ id: z.number(), userId: z.number(), items: z.array(z.object({ productId: z.number(), unitPrice: moneyAmount, quantity: nonNegativeQty, discount: moneyAmount })), customerId: z.number().optional(), discount: moneyAmount.optional(), deliveryFee: moneyAmount.optional() }))
     .mutation(async ({ input, ctx }) => {
       return quoteService.update(input.id, ctx.user.id, requireAccountId(ctx), input.items, input.customerId, input.discount, input.deliveryFee);
     }),
@@ -532,20 +557,20 @@ export const quoteRouter = t.router({
     }),
 
   convertToSale: authenticatedProcedure
-    .input(z.object({ id: z.number(), cashSessionId: z.number(), userId: z.number(), payments: z.array(z.object({ method: z.string(), amount: z.number(), reference: z.string().optional() })) }))
+    .input(z.object({ id: z.number(), cashSessionId: z.number(), userId: z.number(), payments: z.array(z.object({ method: z.string(), amount: positiveMoney, reference: z.string().optional() })) }))
     .mutation(async ({ input, ctx }) => {
       return quoteService.convertToSale(input.id, input.cashSessionId, ctx.user.id, input.payments, requireAccountId(ctx));
     }),
 });
 
 export const exportRouter = t.router({
-  inventory: authenticatedProcedure
+  inventory: adminOrSupervisor
     .input(z.object({ format: z.enum(['csv', 'xlsx']).optional() }).optional())
     .mutation(async ({ input, ctx }) => {
       return { path: await exportService.exportInventory(input?.format, requireAccountId(ctx)) };
     }),
 
-  sales: authenticatedProcedure
+  sales: adminOrSupervisor
     .input(z.object({ dateFrom: z.string().optional(), dateTo: z.string().optional(), branchId: z.number().optional(), format: z.enum(['csv', 'xlsx']).optional() }).optional())
     .mutation(async ({ input, ctx }) => {
       return { path: await exportService.exportSales(input?.dateFrom, input?.dateTo, input?.branchId, input?.format, requireAccountId(ctx)) };
@@ -563,13 +588,13 @@ export const exportRouter = t.router({
       return { path: await exportService.exportAudit(input?.startDate, input?.endDate, input?.format, requireAccountId(ctx)) };
     }),
 
-  cashSessions: authenticatedProcedure
+  cashSessions: adminOrSupervisor
     .input(z.object({ startDate: z.string().optional(), endDate: z.string().optional(), format: z.enum(['csv', 'xlsx']).optional() }).optional())
     .mutation(async ({ input, ctx }) => {
       return { path: await exportService.exportCashSessions(input?.startDate, input?.endDate, input?.format, requireAccountId(ctx)) };
     }),
 
-  noRotation: authenticatedProcedure
+  noRotation: adminOrSupervisor
     .input(z.object({ format: z.enum(['csv', 'xlsx']).optional() }).optional())
     .mutation(async ({ input, ctx }) => {
       return { path: await exportService.exportNoRotation(input?.format, requireAccountId(ctx)) };
@@ -622,7 +647,7 @@ export const labelRouter = t.router({
 });
 
 export const payrollRouter = t.router({
-  getPayroll: authenticatedProcedure
+  getPayroll: adminOnly
     .input(z.object({ period: z.enum(['daily', 'weekly', 'monthly']), periodStart: z.string(), periodEnd: z.string() }))
     .query(async ({ input, ctx }) => {
       return payrollService.getPayroll(input.period, input.periodStart, input.periodEnd, requireAccountId(ctx));
@@ -630,7 +655,7 @@ export const payrollRouter = t.router({
 });
 
 export const backupRouter = t.router({
-  list: authenticatedProcedure.query(async () => {
+  list: adminOnly.query(async () => {
     return backupService.listBackups();
   }),
 
@@ -652,6 +677,16 @@ export const backupRouter = t.router({
 
   dbInfo: adminOnly.query(async () => {
     return backupService.getDatabaseInfo();
+  }),
+});
+
+export const migrationRouter = t.router({
+  detect: adminOnly.query(async () => {
+    return migrationService.detectV2();
+  }),
+
+  importV2: adminOnly.mutation(async () => {
+    return migrationService.migrateV2();
   }),
 });
 
@@ -689,6 +724,7 @@ export const appRouter = t.router({
   payroll: payrollRouter,
 
   backup: backupRouter,
+  migration: migrationRouter,
   license: licenseRouter,
 });
 

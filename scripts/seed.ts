@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- script CLI: su salida es su interfaz de usuario. */
 import bcrypt from 'bcryptjs';
 import Database from 'better-sqlite3';
 import { getDatabasePath } from '../app/main/utils/paths';

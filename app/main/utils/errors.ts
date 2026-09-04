@@ -1,3 +1,5 @@
+import { TRPCError } from '@trpc/server';
+
 export enum ErrorCode {
   NOT_FOUND = 'NOT_FOUND',
   VALIDATION = 'VALIDATION',
@@ -32,8 +34,8 @@ export function toApiError(err: unknown): { code: string; message: string } {
   if (err instanceof AppError) {
     return { code: err.code, message: err.message };
   }
-  if (err instanceof Error) {
-    return { code: 'INTERNAL_ERROR', message: err.message };
+  if (err instanceof TRPCError) {
+    return { code: err.code, message: err.message };
   }
-  return { code: 'INTERNAL_ERROR', message: 'Error desconocido' };
+  return { code: 'INTERNAL_ERROR', message: 'Error interno del servidor.' };
 }

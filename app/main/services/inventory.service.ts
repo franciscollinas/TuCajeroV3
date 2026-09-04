@@ -1,4 +1,4 @@
-import { eq, and, or, like, gt, gte, inArray, desc, asc, sum, sql } from 'drizzle-orm';
+import { eq, and, or, like, gt, gte, inArray, desc, asc, sum, count, sql } from 'drizzle-orm';
 
 import { getDatabase, schema } from '../db';
 import { ErrorCode, AppError } from '../utils/errors';
@@ -30,7 +30,7 @@ function mapProduct(row: {
   name: string;
   description: string | null;
   categoryId: number | null;
-  categoryName: string;
+  categoryName: string | null;
   categoryColor: string | null;
   price: number;
   cost: number;
@@ -57,7 +57,7 @@ function mapProduct(row: {
     categoryId: row.categoryId,
     category: {
       id: row.categoryId || 0,
-      name: row.categoryName,
+      name: row.categoryName ?? '',
       color: row.categoryColor,
       createdAt: '',
       updatedAt: '',
@@ -115,12 +115,29 @@ function parseImportNumber(value: string | number | undefined, fallback = 0): nu
     return Number.isFinite(value) ? value : fallback;
   }
   if (typeof value === 'string') {
-    const normalized = value
-      .trim()
-      .replace(/\$/g, '')
-      .replace(/\s/g, '')
-      .replace(/\./g, '')
-      .replace(/,/g, '.');
+    let normalized = value.trim().replace(/\$/g, '').replace(/\s/g, '');
+
+    const hasComma = normalized.includes(',');
+    const dotCount = (normalized.match(/\./g) || []).length;
+
+    if (hasComma && dotCount > 0) {
+      // Formato latino "1.234.567,89": los puntos son miles y la coma decimal.
+      normalized = normalized.replace(/\./g, '').replace(/,/g, '.');
+    } else if (hasComma) {
+      // Decimal con coma "1234,56".
+      normalized = normalized.replace(/,/g, '.');
+    } else if (dotCount > 1) {
+      // Miles con punto "1.234.567".
+      normalized = normalized.replace(/\./g, '');
+    } else if (dotCount === 1) {
+      const [intPart, decPart] = normalized.split('.');
+      // "25000.50" y "0.19" usan el punto decimal; solo se trata como miles
+      // un único punto seguido de exactamente 3 dígitos ("1.500").
+      if (decPart && decPart.length === 3 && intPart.length > 0 && intPart !== '0') {
+        normalized = normalized.replace(/\./g, '');
+      }
+    }
+
     const parsed = Number(normalized);
     return Number.isFinite(parsed) ? parsed : fallback;
   }
@@ -213,7 +230,7 @@ export class InventoryService {
     search?: string;
     categoryId?: number;
     orderBySales?: boolean;
-  }, accountId?: number | null): Promise<Product[]> {
+  }, accountId?: number | null): Promise<{ products: Product[]; total: number }> {
     const db = getDatabase();
     const { page, pageSize, search, categoryId, orderBySales } = options || {};
 
@@ -236,6 +253,13 @@ export class InventoryService {
     }
 
     const baseFilter = and(...conditions);
+
+    const total = await db
+      .select({ count: count().mapWith(Number) })
+      .from(schema.products)
+      .where(baseFilter)
+      .get();
+    const totalProducts = total?.count ?? 0;
 
     let rows: unknown[];
 
@@ -288,7 +312,7 @@ export class InventoryService {
           updatedAt: schema.products.updatedAt,
         })
         .from(schema.products)
-        .innerJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
+        .leftJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
         .where(and(eq(schema.products.isActive, true), ...(accountId ? [eq(schema.products.accountId, accountId)] : []), ...(topIds.length ? [inArray(schema.products.id, topIds)] : [])))
         .orderBy(asc(schema.products.name));
 
@@ -334,7 +358,7 @@ export class InventoryService {
           updatedAt: schema.products.updatedAt,
         })
         .from(schema.products)
-        .innerJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
+        .leftJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
         .where(baseFilter)
         .orderBy(asc(schema.products.name))
         .limit(pageSize ?? 99999)
@@ -365,9 +389,11 @@ export class InventoryService {
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (rows as any[]).map((row) =>
+    const products = (rows as any[]).map((row) =>
       mapProduct({ ...row, salesLast30Days: salesMap.get(row.id) || 0 }),
     );
+
+    return { products, total: totalProducts };
   }
 
   async getProductById(id: number, accountId?: number | null): Promise<ProductDetail> {
@@ -399,7 +425,7 @@ export class InventoryService {
         updatedAt: schema.products.updatedAt,
       })
       .from(schema.products)
-      .innerJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
+      .leftJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
       .where(and(eq(schema.products.id, id), ...(accountId ? [eq(schema.products.accountId, accountId)] : [])))
       .limit(1);
 
@@ -448,7 +474,7 @@ export class InventoryService {
         updatedAt: schema.products.updatedAt,
       })
       .from(schema.products)
-      .innerJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
+      .leftJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
       .where(and(eq(schema.products.barcode, barcode), ...(accountId ? [eq(schema.products.accountId, accountId)] : [])))
       .limit(1);
 
@@ -510,6 +536,7 @@ export class InventoryService {
 
     if (data.stock > 0) {
       await db.insert(schema.stockMovements).values({
+        accountId: accountId ?? null,
         productId: product.id,
         type: 'entrada',
         quantity: data.stock,
@@ -540,32 +567,63 @@ export class InventoryService {
       ? await this.resolveCategory(data, accountId)
       : undefined;
 
-    const { stock: _, ...safeData } = data;
-    void _;
+    const { stock, userId, ...safeData } = data;
 
     const now = nowISO();
 
-    await db
-      .update(schema.products)
-      .set({
-        code: safeData.code,
-        barcode: safeData.barcode ?? undefined,
-        name: safeData.name,
-        description: safeData.description ?? undefined,
-        categoryId,
-        price: safeData.price,
-        cost: safeData.cost,
-        minStock: safeData.minStock,
-        criticalStock: safeData.criticalStock,
-        taxRate: safeData.taxRate,
-        suggestedPurchaseQty: safeData.suggestedPurchaseQty ?? undefined,
-        expiryDate: safeData.expiryDate ?? undefined,
-        location: safeData.location ?? undefined,
-        unitType: safeData.unitType,
-        conversionFactor: safeData.conversionFactor,
-        updatedAt: now,
-      })
-      .where(and(eq(schema.products.id, id), ...(accountId ? [eq(schema.products.accountId, accountId)] : [])));
+    await db.transaction((tx) => {
+      if (stock != null) {
+        const current = tx
+          .select({ stock: schema.products.stock })
+          .from(schema.products)
+          .where(and(eq(schema.products.id, id), ...(accountId ? [eq(schema.products.accountId, accountId)] : [])))
+          .get();
+
+        if (current && current.stock !== stock) {
+          const delta = stock - current.stock;
+          tx.update(schema.products)
+            .set({ stock, updatedAt: now })
+            .where(eq(schema.products.id, id))
+            .run();
+
+          tx.insert(schema.stockMovements)
+            .values({
+              accountId: accountId ?? null,
+              productId: id,
+              type: delta >= 0 ? 'entrada' : 'salida',
+              quantity: Math.abs(delta),
+              previousStock: current.stock,
+              newStock: stock,
+              reason: 'Ajuste por edición de producto',
+              userId: userId ?? 0,
+              createdAt: now,
+            })
+            .run();
+        }
+      }
+
+      tx.update(schema.products)
+        .set({
+          code: safeData.code,
+          barcode: safeData.barcode ?? undefined,
+          name: safeData.name,
+          description: safeData.description ?? undefined,
+          categoryId,
+          price: safeData.price,
+          cost: safeData.cost,
+          minStock: safeData.minStock,
+          criticalStock: safeData.criticalStock,
+          taxRate: safeData.taxRate,
+          suggestedPurchaseQty: safeData.suggestedPurchaseQty ?? undefined,
+          expiryDate: safeData.expiryDate ?? undefined,
+          location: safeData.location ?? undefined,
+          unitType: safeData.unitType,
+          conversionFactor: safeData.conversionFactor,
+          updatedAt: now,
+        })
+        .where(and(eq(schema.products.id, id), ...(accountId ? [eq(schema.products.accountId, accountId)] : [])))
+        .run();
+    });
 
     const fullProduct = await this.getProductById(id, accountId);
     return fullProduct;
@@ -620,7 +678,7 @@ export class InventoryService {
         .values({
           accountId: accountId ?? null,
           productId,
-          type: quantity >= 0 ? 'entrada' : 'salida',
+          type: 'ajuste',
           quantity: Math.abs(quantity),
           previousStock: product.stock,
           newStock,
@@ -705,7 +763,7 @@ export class InventoryService {
         updatedAt: schema.products.updatedAt,
       })
       .from(schema.products)
-      .innerJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
+      .leftJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
       .where(and(eq(schema.products.isActive, true), ...(accountId ? [eq(schema.products.accountId, accountId)] : [])));
 
     const mapped = rows.map((r) => mapProduct(r));
@@ -758,7 +816,7 @@ export class InventoryService {
         updatedAt: schema.products.updatedAt,
       })
       .from(schema.products)
-      .innerJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
+      .leftJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
       .where(and(eq(schema.products.isActive, true), sql`${schema.products.expiryDate} IS NOT NULL`, ...(accountId ? [eq(schema.products.accountId, accountId)] : [])));
 
     const mapped = rows.map((r) => mapProduct(r));
@@ -792,43 +850,56 @@ export class InventoryService {
           let category = tx
             .select()
             .from(schema.categories)
-            .where(eq(schema.categories.name, item.category))
+            .where(and(eq(schema.categories.name, item.category), ...(accountId ? [eq(schema.categories.accountId, accountId)] : [])))
             .get();
 
-if (!category) {
-               tx.insert(schema.categories)
-                  .values({ name: item.category, accountId: accountId ?? null, createdAt: now, updatedAt: now })
-                 .run();
-               category = tx
-                 .select()
-                 .from(schema.categories)
-                 .where(eq(schema.categories.name, item.category))
-                 .get();
-             }
+          if (!category) {
+            tx.insert(schema.categories)
+              .values({ name: item.category, color: item.categoryColor || null, accountId: accountId ?? null, createdAt: now, updatedAt: now })
+              .run();
+            category = tx
+              .select()
+              .from(schema.categories)
+              .where(and(eq(schema.categories.name, item.category), ...(accountId ? [eq(schema.categories.accountId, accountId)] : [])))
+              .get();
+          } else if (item.categoryColor && category.color !== item.categoryColor) {
+            tx.update(schema.categories)
+              .set({ color: item.categoryColor, updatedAt: now })
+              .where(eq(schema.categories.id, category.id))
+              .run();
+          }
 
           const existing = tx
             .select({ id: schema.products.id, stock: schema.products.stock })
             .from(schema.products)
-            .where(eq(schema.products.code, item.code))
+            .where(and(eq(schema.products.code, item.code), ...(accountId ? [eq(schema.products.accountId, accountId)] : [])))
             .get();
 
           const csvStock = Math.trunc(parseImportNumber(item.stock));
+          if (!Number.isFinite(csvStock) || csvStock < 0) {
+            throw new AppError(ErrorCode.VALIDATION, `Stock inválido para el producto ${item.code}: ${item.stock}.`);
+          }
 
           if (existing) {
+            const updateData: Record<string, unknown> = {
+              name: item.name,
+              categoryId: category!.id,
+              price: parseImportNumber(item.price),
+              cost: parseImportNumber(item.cost),
+              updatedAt: now,
+            };
+
+            const barcode = normalizeBarcode(item.barcode);
+            if (barcode) updateData.barcode = barcode;
+            if (item.description) updateData.description = item.description;
+            if (item.minStock != null && item.minStock !== '') updateData.minStock = Math.trunc(parseImportNumber(item.minStock));
+            if (item.criticalStock != null && item.criticalStock !== '') updateData.criticalStock = Math.trunc(parseImportNumber(item.criticalStock));
+            if (item.taxRate) updateData.taxRate = parseImportNumber(item.taxRate, 0) / 100;
+            if (item.expiryDate) updateData.expiryDate = parseImportDate(item.expiryDate);
+            if (item.location) updateData.location = item.location;
+
             tx.update(schema.products)
-              .set({
-                barcode: normalizeBarcode(item.barcode),
-                name: item.name,
-                description: item.description || null,
-                categoryId: category!.id,
-                price: parseImportNumber(item.price),
-                cost: parseImportNumber(item.cost),
-                minStock: Math.trunc(parseImportNumber(item.minStock, 5)),
-                criticalStock: Math.trunc(parseImportNumber(item.criticalStock, 2)),
-                expiryDate: parseImportDate(item.expiryDate),
-                location: item.location || null,
-                updatedAt: now,
-              })
+              .set(updateData)
               .where(eq(schema.products.id, existing.id))
               .run();
 
@@ -870,7 +941,7 @@ tx.insert(schema.products)
                 stock: csvStock,
                 minStock: Math.trunc(parseImportNumber(item.minStock, 5)),
                 criticalStock: Math.trunc(parseImportNumber(item.criticalStock, 2)),
-                taxRate: 0,
+                taxRate: item.taxRate ? parseImportNumber(item.taxRate, 0) / 100 : 0,
                 expiryDate: parseImportDate(item.expiryDate),
                 location: item.location || null,
                 isActive: true,
@@ -882,7 +953,7 @@ tx.insert(schema.products)
             const created = tx
               .select({ id: schema.products.id, stock: schema.products.stock })
               .from(schema.products)
-              .where(eq(schema.products.code, item.code))
+              .where(and(eq(schema.products.code, item.code), ...(accountId ? [eq(schema.products.accountId, accountId)] : [])))
               .get();
 
 if (created && csvStock > 0) {
@@ -1020,12 +1091,14 @@ if (created && csvStock > 0) {
         stock: schema.products.stock,
         price: schema.products.price,
         cost: schema.products.cost,
+        createdAt: schema.products.createdAt,
       })
       .from(schema.products)
       .leftJoin(soldProductIds, eq(schema.products.id, soldProductIds.productId))
       .where(
         and(
           eq(schema.products.isActive, true),
+          ...(accountId ? [eq(schema.products.accountId, accountId)] : []),
           gt(schema.products.stock, 0),
           sql`${soldProductIds.productId} IS NULL`,
         ),
@@ -1059,10 +1132,7 @@ if (created && csvStock > 0) {
       lastSaleDate: lastSaleDates[i],
       daysWithoutSale: lastSaleDates[i]
         ? Math.floor((Date.now() - new Date(lastSaleDates[i]).getTime()) / (1000 * 60 * 60 * 24))
-        : (() => {
-            const createdAt = new Date(('createdAt' in row ? (row as { createdAt: string }).createdAt : null) ?? Date.now());
-            return Math.floor((Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24));
-          })(),
+        : Math.floor((Date.now() - new Date(row.createdAt).getTime()) / (1000 * 60 * 60 * 24)),
     }));
   }
 }

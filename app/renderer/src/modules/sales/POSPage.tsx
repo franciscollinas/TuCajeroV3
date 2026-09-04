@@ -14,6 +14,7 @@ import { useBarcodeScanner } from '../../shared/hooks/useBarcodeScanner';
 import type { Product } from '../../shared/types/inventory.types';
 import type { CashRegister } from '../../shared/types/cash.types';
 import type { PaymentInput, PaymentMethod, CartItemInput, SaleRecord } from '../../shared/types/sales.types';
+import { PrintReceiptModal } from '../../shared/components/PrintReceiptModal';
 
 interface Customer {
   id: number;
@@ -124,7 +125,8 @@ export function POSPage(): JSX.Element {
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error' | 'info'>('info');
   const [modalError, setModalError] = useState<string | null>(null);
-  const [businessConfig, setBusinessConfig] = useState<any>(null);
+  const [businessConfig, setBusinessConfig] = useState<{ ivaEnabled?: boolean; businessName?: string; address?: string; phone?: string; nit?: string } | null>(null);
+  const [printReceiptSale, setPrintReceiptSale] = useState<SaleRecord | null>(null);
 
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
@@ -436,13 +438,13 @@ export function POSPage(): JSX.Element {
     }
     const hasCredit = payments.some((p) => p.method === 'credito');
     if (hasCredit && selectedCustomerId) {
-      await processCreditSale();
+      await processCreditSale(payments);
     } else {
       await processCompleteSale(payments, false);
     }
   };
 
-  const processCreditSale = async (): Promise<void> => {
+  const processCreditSale = async (finalPayments: PaymentInput[]): Promise<void> => {
     if (!user || !activeCash || cart.length === 0 || !selectedCustomerId) return;
     setLoading(true);
     try {
@@ -456,7 +458,7 @@ export function POSPage(): JSX.Element {
         cashSessionId: activeCash.id,
         userId: user.id,
         items,
-        payments: [],
+        payments: finalPayments.filter((p) => p.method !== 'credito'),
         discount: globalDiscount,
         deliveryFee,
         customerId: selectedCustomerId ?? undefined,
@@ -464,16 +466,15 @@ export function POSPage(): JSX.Element {
         discountType,
       });
       const sale = result as SaleRecord;
-      setMessageType('success');
-      setMessage(`Venta a crédito #${sale.saleNumber} registrada - Cuenta por cobrar: ${formatCurrency(total)}`);
-      clearCart();
       void refreshProducts();
+      // Cerrar modal de pago y mostrar modal de impresión
+      setShowCheckoutModal(false);
+      setPrintReceiptSale(sale);
     } catch (err) {
       setModalError(err instanceof Error ? err.message : 'Error al procesar');
     } finally {
       setLoading(false);
     }
-    setTimeout(() => setMessage(''), 4000);
   };
 
   const processCompleteSale = async (finalPayments: PaymentInput[], isCreditSale = false): Promise<void> => {
@@ -503,14 +504,15 @@ export function POSPage(): JSX.Element {
       const changeMsg = change > 0 ? ` (Cambio: ${formatCurrency(change)})` : '';
       setMessageType('success');
       setMessage(`Venta #${sale.saleNumber} completada${changeMsg}`);
-      clearCart();
       void refreshProducts();
+      // Cerrar modal de pago y mostrar modal de impresión
+      setShowCheckoutModal(false);
+      setPrintReceiptSale(sale);
     } catch (err) {
       setModalError(err instanceof Error ? err.message : 'Error al procesar');
     } finally {
       setLoading(false);
     }
-    setTimeout(() => setMessage(''), 4000);
   };
 
   // --- No active cash state ---
@@ -546,6 +548,7 @@ export function POSPage(): JSX.Element {
   }
 
   return (
+    <>
     <div style={{ padding: 'var(--space-6)', maxWidth: '1700px', margin: '0 auto', overflow: 'hidden', animation: 'fadeIn 0.3s ease' }}>
       {/* Message banner */}
       {message && (
@@ -1133,5 +1136,62 @@ export function POSPage(): JSX.Element {
         </div>
       )}
     </div>
+
+      {/* Modal de impresión de recibo post-venta */}
+      {printReceiptSale && (
+        <PrintReceiptModal
+          isOpen={!!printReceiptSale}
+          saleNumber={printReceiptSale.saleNumber}
+          onPrint={async (shouldPrint) => {
+            if (shouldPrint && printReceiptSale) {
+              try {
+                const biz = businessConfig ?? {};
+                const salePayload = {
+                  saleNumber: printReceiptSale.saleNumber,
+                  total: printReceiptSale.total,
+                  subtotal: printReceiptSale.subtotal,
+                  tax: printReceiptSale.tax,
+                  discount: printReceiptSale.discount,
+                  deliveryFee: printReceiptSale.deliveryFee ?? 0,
+                  change: printReceiptSale.change ?? 0,
+                  createdAt: printReceiptSale.createdAt,
+                  items: printReceiptSale.items.map((i) => ({
+                    product: { name: i.product?.name ?? '' },
+                    quantity: i.quantity,
+                    unitPrice: i.unitPrice,
+                    total: i.total,
+                    discount: i.discount,
+                  })),
+                  payments: printReceiptSale.payments.map((p) => ({ method: p.method, amount: p.amount })),
+                  customer: printReceiptSale.customer ? { name: printReceiptSale.customer.name } : null,
+                  user: printReceiptSale.user ? { fullName: printReceiptSale.user.fullName } : null,
+                };
+                const bizPayload = {
+                  businessName: biz.businessName,
+                  address: biz.address,
+                  phone: biz.phone,
+                  nit: biz.nit,
+                };
+                const result = await trpc.config.printReceipt.mutate({ sale: salePayload, businessConfig: bizPayload });
+                if (result.success) {
+                  setMessageType('success');
+                  setMessage('Recibo enviado a la impresora.');
+                } else {
+                  setMessageType('error');
+                  setMessage(result.message);
+                }
+                setTimeout(() => setMessage(''), 5000);
+              } catch (err) {
+                setMessageType('error');
+                setMessage(err instanceof Error ? err.message : 'Error al imprimir');
+                setTimeout(() => setMessage(''), 5000);
+              }
+            }
+            setPrintReceiptSale(null);
+            clearCart();
+          }}
+        />
+      )}
+    </>
   );
 }

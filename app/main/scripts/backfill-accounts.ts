@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- script CLI: su salida es su interfaz de usuario. */
 import Database from 'better-sqlite3';
 import { getDatabasePath } from '../utils/paths';
 

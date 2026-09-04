@@ -5,7 +5,7 @@ import { Eye, FileText, XCircle, ShoppingCart, Calendar, CreditCard, Package, Ch
 
 import { trpc } from '../../trpc';
 import { useAuth } from '../../shared/context/AuthContext';
-import { formatCurrency, formatDate, formatDateTime } from '../../shared/utils/formatters';
+import { formatCurrency, formatDate, formatDateTime, toLocalDateInput } from '../../shared/utils/formatters';
 import type { SaleRecord, SaleItem, SalePayment } from '../../shared/types/sales.types';
 import { ConfirmDialog } from '../../shared/components/ConfirmDialog';
 
@@ -69,8 +69,8 @@ export function SalesHistoryPage(): JSX.Element {
   // Date range filter
   const today = new Date();
   const defaultStart = new Date(today.getFullYear(), today.getMonth(), 1);
-  const [startDate, setStartDate] = useState(defaultStart.toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(today.toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(toLocalDateInput(defaultStart));
+  const [endDate, setEndDate] = useState(toLocalDateInput(today));
 
   const canCancel = isAuthorized(['ADMIN', 'SUPERVISOR']);
 

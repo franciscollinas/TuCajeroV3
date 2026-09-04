@@ -32,6 +32,7 @@ const CustomersPage = lazy(() => import('./modules/customers/CustomersPage'));
 const BranchPage = lazy(() => import('./modules/branch/BranchPage'));
 import { AuthProvider, useAuth } from './shared/context/AuthContext';
 import { ConfigProvider } from './shared/context/ConfigContext';
+import { LicenseProvider } from './shared/context/LicenseContext';
 import { es } from './shared/i18n';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
@@ -89,8 +90,9 @@ export default function App(): JSX.Element {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <ConfigProvider>
-          <HashRouter>
+        <LicenseProvider>
+          <ConfigProvider>
+            <HashRouter>
             <Suspense
               fallback={
                 <div
@@ -230,7 +232,7 @@ export default function App(): JSX.Element {
                 <Route
                   path="/license"
                   element={
-                    <ProtectedRoute roles={['ADMIN']}>
+                    <ProtectedRoute>
                       <LayoutRoute>
                         <LicensePage />
                       </LayoutRoute>
@@ -333,7 +335,8 @@ export default function App(): JSX.Element {
               </Routes>
             </Suspense>
           </HashRouter>
-        </ConfigProvider>
+          </ConfigProvider>
+        </LicenseProvider>
       </AuthProvider>
     </ErrorBoundary>
   );

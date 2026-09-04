@@ -13,7 +13,7 @@ import type {
   PurchaseSummary,
 } from '../../renderer/src/shared/types/purchase.types';
 
-async function buildOrderNumber(): Promise<string> {
+async function buildOrderNumber(accountId?: number | null): Promise<string> {
   const db = getDatabase();
   const year = new Date().getFullYear();
   const prefix = `PO-${year}-`;
@@ -21,7 +21,7 @@ async function buildOrderNumber(): Promise<string> {
   const [last] = await db
     .select({ orderNumber: schema.purchaseOrders.orderNumber })
     .from(schema.purchaseOrders)
-    .where(like(schema.purchaseOrders.orderNumber, `${prefix}%`))
+    .where(and(...(accountId ? [eq(schema.purchaseOrders.accountId, accountId)] : []), like(schema.purchaseOrders.orderNumber, `${prefix}%`)))
     .orderBy(desc(schema.purchaseOrders.orderNumber))
     .limit(1);
 
@@ -130,7 +130,7 @@ export class PurchaseService {
       })
       .where(and(eq(schema.suppliers.id, id), ...(accountId ? [eq(schema.suppliers.accountId, accountId)] : [])));
 
-    return (await this.getSupplierById(id))!;
+    return (await this.getSupplierById(id, accountId))!;
   }
 
   async deleteSupplier(id: number, accountId?: number | null): Promise<{ success: true }> {
@@ -146,7 +146,7 @@ export class PurchaseService {
       throw new AppError(ErrorCode.VALIDATION, 'No se puede eliminar proveedor con pedidos asociados.');
     }
 
-    await db.delete(schema.suppliers).where(eq(schema.suppliers.id, id));
+    await db.delete(schema.suppliers).where(and(eq(schema.suppliers.id, id), ...(accountId ? [eq(schema.suppliers.accountId, accountId)] : [])));
     return { success: true };
   }
 
@@ -257,7 +257,7 @@ export class PurchaseService {
 
   async createPurchaseOrder(userId: number, data: CreatePurchaseOrderInput, accountId?: number | null): Promise<PurchaseOrder> {
     const db = getDatabase();
-    const orderNumber = await buildOrderNumber();
+    const orderNumber = await buildOrderNumber(accountId);
     const now = nowISO();
 
     // Get user's branch if not provided
@@ -306,7 +306,7 @@ export class PurchaseService {
       });
     }
 
-    return this.getPurchaseOrderById(order.id) as Promise<PurchaseOrder>;
+    return this.getPurchaseOrderById(order.id, accountId) as Promise<PurchaseOrder>;
   }
 
   async updatePurchaseOrderStatus(id: number, status: PurchaseOrderStatus, accountId?: number | null): Promise<PurchaseOrder> {
@@ -323,7 +323,7 @@ export class PurchaseService {
       .set({ ...updateData, updatedAt: now })
       .where(and(eq(schema.purchaseOrders.id, id), ...(accountId ? [eq(schema.purchaseOrders.accountId, accountId)] : [])));
 
-    return (await this.getPurchaseOrderById(id))!;
+    return (await this.getPurchaseOrderById(id, accountId))!;
   }
 
   async receiveItems(orderId: number, userId: number, items: ReceiveItemInput[], accountId?: number | null): Promise<PurchaseOrder> {
@@ -355,21 +355,35 @@ export class PurchaseService {
 
         if (!orderItem) continue;
 
-        const newQuantityReceived = item.received
-          ? item.quantityReceived
-          : orderItem.quantityReceived;
-        const received = item.received && item.quantityReceived > 0;
+        if (orderItem.orderId !== orderId) {
+          throw new AppError(ErrorCode.VALIDATION, `El ítem #${orderItem.id} no pertenece al pedido ${orderId}.`);
+        }
+
+        const qty = Number(item.quantityReceived);
+        if (!Number.isFinite(qty) || qty < 0 || qty > orderItem.quantityOrdered) {
+          throw new AppError(
+            ErrorCode.VALIDATION,
+            `Cantidad recibida inválida para el ítem #${orderItem.id} (0 a ${orderItem.quantityOrdered}).`,
+          );
+        }
+
+        const delta = qty - (orderItem.quantityReceived ?? 0);
+        if (delta < 0) {
+          throw new AppError(ErrorCode.VALIDATION, 'La cantidad recibida no puede ser menor a la ya registrada.');
+        }
+
+        const received = qty >= orderItem.quantityOrdered;
 
         tx.update(schema.purchaseOrderItems)
           .set({
-            quantityReceived: newQuantityReceived,
+            quantityReceived: qty,
             received,
             observations: item.observations ?? null,
           })
           .where(eq(schema.purchaseOrderItems.id, item.orderItemId))
           .run();
 
-        if (received && item.quantityReceived > 0) {
+        if (delta > 0) {
           const product = tx
             .select()
             .from(schema.products)
@@ -377,7 +391,7 @@ export class PurchaseService {
             .get();
 
           if (product) {
-            const newStock = product.stock + item.quantityReceived;
+            const newStock = product.stock + delta;
             tx.update(schema.products)
               .set({ stock: newStock, updatedAt: now })
               .where(eq(schema.products.id, orderItem.productId))
@@ -388,7 +402,7 @@ export class PurchaseService {
                 accountId: accountId ?? null,
                 productId: orderItem.productId,
                 type: 'entrada',
-                quantity: item.quantityReceived,
+                quantity: delta,
                 previousStock: product.stock,
                 newStock,
                 reason: `Recibido pedido ${order.orderNumber}`,
@@ -447,7 +461,7 @@ export class PurchaseService {
       })
       .where(eq(schema.purchaseOrders.id, id));
 
-    return (await this.getPurchaseOrderById(id))!;
+    return (await this.getPurchaseOrderById(id, accountId))!;
   }
 
   async deletePurchaseOrder(id: number, accountId?: number | null): Promise<{ success: true }> {

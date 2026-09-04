@@ -237,8 +237,9 @@ export class CustomerService {
     debtId: number,
     amount: number,
     userId: number,
-    cashSessionId: number,
+    cashSessionId?: number | null,
     accountId?: number | null,
+    method: string = 'efectivo',
   ): Promise<CustomerDebt> {
     const db = getDatabase();
     const now = nowISO();
@@ -265,6 +266,34 @@ export class CustomerService {
       throw new AppError(ErrorCode.VALIDATION, 'El monto del pago excede el saldo de la deuda.');
     }
 
+    let sessionId = cashSessionId ?? null;
+    if (!sessionId) {
+      const [openSession] = await db
+        .select({ id: schema.cashSessions.id })
+        .from(schema.cashSessions)
+        .where(and(eq(schema.cashSessions.userId, userId), eq(schema.cashSessions.status, 'OPEN')))
+        .limit(1);
+      if (openSession) sessionId = openSession.id;
+    }
+
+    if (!sessionId) {
+      throw new AppError(ErrorCode.NO_OPEN_SESSION, 'No hay una caja abierta para registrar el abono.');
+    }
+
+    const [session] = await db
+      .select({ id: schema.cashSessions.id, status: schema.cashSessions.status, accountId: schema.cashSessions.accountId })
+      .from(schema.cashSessions)
+      .where(eq(schema.cashSessions.id, sessionId))
+      .limit(1);
+
+    if (!session || session.status !== 'OPEN') {
+      throw new AppError(ErrorCode.NO_OPEN_SESSION, 'No hay una caja abierta para registrar el abono.');
+    }
+
+    if (accountId && session.accountId !== accountId) {
+      throw new AppError(ErrorCode.FORBIDDEN, 'La sesión de caja no pertenece a tu cuenta.');
+    }
+
     const newBalance = debt.balance - amount;
 
     await db.transaction((tx) => {
@@ -280,12 +309,27 @@ export class CustomerService {
       tx.insert(schema.payments)
         .values({
           debtId,
-          cashSessionId,
-          method: 'efectivo',
+          cashSessionId: sessionId,
+          method,
           amount,
           createdAt: now,
         })
         .run();
+
+      if (method === 'efectivo') {
+        const cs = tx
+          .select({ expectedCash: schema.cashSessions.expectedCash, initialCash: schema.cashSessions.initialCash })
+          .from(schema.cashSessions)
+          .where(eq(schema.cashSessions.id, sessionId))
+          .get();
+
+        if (cs) {
+          tx.update(schema.cashSessions)
+            .set({ expectedCash: (cs.expectedCash ?? cs.initialCash) + amount })
+            .where(eq(schema.cashSessions.id, sessionId))
+            .run();
+        }
+      }
     });
 
     await auditService.log({

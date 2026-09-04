@@ -6,6 +6,8 @@ directories:
 files:
   - dist/**/*
   - app/renderer/public/**/*
+  - database/migrations/**/*
+  - build/icon.ico
   - node_modules/**/*
   - package.json
   - '!node_modules/@types/**/*'
@@ -16,7 +18,6 @@ files:
   - '!**/*.map'
   - '!**/*.md'
   - '!**/tests/**/*'
-  - '!**/*.cjs'
 asar: true
 asarUnpack:
   - '**/*.node'
@@ -46,7 +47,17 @@ publish:
 compression: maximum
 
 # Code signing configuration
-# To enable, obtain a code signing certificate and configure:
-# certificateFile: path/to/certificate.p12
-# certificatePassword: your-certificate-password
-# sign: null  # uncomment and set path to signtool.exe if needed
+# electron-builder firma automáticamente cuando detecta credenciales en el
+# entorno (no commits de secretos). Activa cualquiera de las dos vías y vuelve a
+# ejecutar `npm run dist`:
+#
+# Opción A — Certificado .pfx:
+#   $env:CSC_LINK="C:\ruta\certificado.pfx"
+#   $env:CSC_KEY_PASSWORD="password"
+#
+# Opción B — Archivo de configuración (alternativa a env):
+#   certificateFile: C:\ruta\certificado.pfx
+#   certificatePassword: password
+#
+# Nota: el sello temporal (timestamp RFC3161 + SHA-256) lo añade electron-builder
+# automáticamente al firmar.
