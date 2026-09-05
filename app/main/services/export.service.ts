@@ -210,6 +210,57 @@ export class ExportService {
     return filePath;
   }
 
+  /** Exporta los logs diarios de auditoría (una fila por usuario/acción del día). */
+  async exportDailyAudit(startDate?: string, endDate?: string, format: 'csv' | 'xlsx' = 'csv', accountId?: number | null): Promise<string> {
+    const { AuditService } = await import('./audit.service');
+    const auditService = new AuditService();
+
+    if (accountId) await auditService.ensureDailyLogs(accountId, 7);
+    const logs = await auditService.getDailyLogs({ startDate, endDate, limit: 5000, accountId });
+
+    let totalEvents = 0;
+    const rows: Array<Record<string, unknown>> = [];
+    for (const log of logs) {
+      totalEvents += log.summary.totalEvents;
+      for (const user of log.summary.byUser) {
+        const actions = Object.entries(user.actions)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([action, count]) => ({ Fecha: log.date, Usuario: user.userName, Acción: action, Cantidad: count }));
+        rows.push(...actions);
+      }
+    }
+
+    const dir = this.ensureDir(format);
+    const ts = toLocalIsoDate(new Date());
+    const fileName = `log_diario_auditoria_${accountId ? accountId + '_' : ''}${ts}.${format}`;
+    const filePath = join(dir, fileName);
+
+    const totals = {
+      Fecha: '',
+      Usuario: 'TOTAL DEL PERÍODO',
+      Acción: '',
+      Cantidad: totalEvents,
+    };
+
+    if (format === 'xlsx') {
+      await this.writeXlsx(rows, filePath, 'Log Diario Auditoría', totals);
+    } else {
+      const headers = ['Fecha', 'Usuario', 'Acción', 'Cantidad'];
+      const escape = (val: unknown): string => {
+        if (val === null || val === undefined) return '';
+        const str = String(val);
+        return /[",;\n\r]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+      };
+      const lines = [
+        headers.join(';'),
+        ...rows.map((r) => headers.map((h) => escape(r[h])).join(';')),
+        `${escape(totals.Fecha)};${escape(totals.Usuario)};${escape(totals.Acción)};${escape(totals.Cantidad)}`,
+      ];
+      writeFileSync(filePath, '\uFEFF' + lines.join('\n') + '\n', 'utf-8');
+    }
+    return filePath;
+  }
+
   async exportCashSessions(startDate?: string, endDate?: string, format: 'csv' | 'xlsx' = 'csv', accountId?: number | null): Promise<string> {
     const db = getDatabase();
     const dir = this.ensureDir(format);

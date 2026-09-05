@@ -26,6 +26,7 @@ export function getDatabase(): ReturnType<typeof drizzle> {
 
     ensureOptionalColumns(sqliteInstance);
     ensureTaxRateFraction(sqliteInstance);
+    ensureDailyAuditTable(sqliteInstance);
 
     const integrityRow = sqliteInstance.pragma('integrity_check') as Array<{ integrity_check: string }> | { integrity_check: string };
     const integrityResult = Array.isArray(integrityRow) ? integrityRow[0]?.integrity_check : integrityRow?.integrity_check;
@@ -78,6 +79,23 @@ export function ensureTaxRateFraction(sqlite: Database.Database): void {
   if (tables.some((t) => t.name === 'Product')) {
     sqlite.exec('UPDATE "Product" SET "taxRate" = "taxRate" / 100 WHERE "taxRate" > 1;');
   }
+}
+
+// Crea (si no existe) la tabla del log diario de auditoría. Los instalados previos
+// no ejecutan migraciones de drizzle (solo bases nuevas), por eso se garantiza aquí.
+export function ensureDailyAuditTable(sqlite: Database.Database): void {
+  sqlite.exec(`
+CREATE TABLE IF NOT EXISTS "DailyAuditLog" (
+  "id" integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+  "accountId" integer NOT NULL REFERENCES "Account"(id) ON DELETE cascade,
+  "date" text NOT NULL,
+  "summary" text NOT NULL,
+  "createdAt" text NOT NULL,
+  "updatedAt" text NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_daily_audit_account_date" ON "DailyAuditLog" ("accountId", "date");
+CREATE INDEX IF NOT EXISTS "idx_daily_audit_date" ON "DailyAuditLog" ("date");
+`);
 }
 
 export { schema };

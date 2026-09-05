@@ -8,6 +8,13 @@
       "when": 1783987856792,
       "tag": "0000_melodic_barracuda",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1783987856792,
+      "tag": "0001_daily_audit_log",
+      "breakpoints": true
     }
   ]
 }

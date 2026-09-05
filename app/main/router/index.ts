@@ -588,6 +588,12 @@ export const exportRouter = t.router({
       return { path: await exportService.exportAudit(input?.startDate, input?.endDate, input?.format, requireAccountId(ctx)) };
     }),
 
+  dailyAudit: adminOnly
+    .input(z.object({ startDate: z.string().optional(), endDate: z.string().optional(), format: z.enum(['csv', 'xlsx']).optional() }).optional())
+    .mutation(async ({ input, ctx }) => {
+      return { path: await exportService.exportDailyAudit(input?.startDate, input?.endDate, input?.format, requireAccountId(ctx)) };
+    }),
+
   cashSessions: adminOrSupervisor
     .input(z.object({ startDate: z.string().optional(), endDate: z.string().optional(), format: z.enum(['csv', 'xlsx']).optional() }).optional())
     .mutation(async ({ input, ctx }) => {
@@ -606,6 +612,21 @@ export const auditRouter = t.router({
     .input(z.object({ limit: z.number().optional(), startDate: z.string().optional(), endDate: z.string().optional(), userId: z.number().optional(), action: z.string().optional(), entity: z.string().optional() }).optional())
     .query(async ({ input, ctx }) => {
       return auditService.getAuditLogs({ ...input, accountId: requireAccountId(ctx) });
+    }),
+
+  // Logs diarios agregados por usuario, con filtro por rango de fechas.
+  daily: adminOrSupervisor
+    .input(z.object({ limit: z.number().optional(), startDate: z.string().optional(), endDate: z.string().optional() }).optional())
+    .query(async ({ input, ctx }) => {
+      const accountId = requireAccountId(ctx);
+      await auditService.ensureDailyLogs(accountId, 7);
+      return auditService.getDailyLogs({ ...input, accountId });
+    }),
+
+  // Genera/actualiza el log diario de hoy (cierre manual del día).
+  saveToday: adminOnly
+    .mutation(async ({ ctx }) => {
+      return auditService.saveTodayLog(requireAccountId(ctx));
     }),
 });
 

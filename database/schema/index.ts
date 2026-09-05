@@ -365,6 +365,20 @@ export const auditLogs = sqliteTable('AuditLog', {
   index('idx_audit_account').on(table.accountId),
 ]);
 
+// Log diario de auditoría: un resumen por día de las acciones registradas en AuditLog,
+// agrupadas por usuario. Una fila por (account, date); "summary" es JSON.
+export const dailyAuditLogs = sqliteTable('DailyAuditLog', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  accountId: integer('accountId').notNull().references(() => accounts.id, { onDelete: 'cascade' }),
+  date: text('date').notNull(),
+  summary: text('summary').notNull(),
+  createdAt: text('createdAt').notNull(),
+  updatedAt: text('updatedAt').notNull(),
+}, (table) => [
+  uniqueIndex('idx_daily_audit_account_date').on(table.accountId, table.date),
+  index('idx_daily_audit_date').on(table.date),
+]);
+
 export const configs = sqliteTable('Config', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   accountId: integer('accountId').references(() => accounts.id, { onDelete: 'cascade' }),

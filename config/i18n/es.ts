@@ -118,6 +118,13 @@ export const es = {
     title: 'Auditoría', subtitle: 'Consulta el historial inmutable de acciones críticas del sistema.',
     empty: 'Todavía no hay registros de auditoría para mostrar.',
     date: 'Fecha', user: 'Usuario', action: 'Acción', entity: 'Entidad', payload: 'Detalle',
+    dailyLogs: 'Log diario', events: 'Eventos', day: 'Día', activities: 'Actividades',
+    totalEvents: 'Total de acciones', perUser: 'Resumen por usuario', actionsDetail: 'Acciones',
+    saveToday: 'Guardar log de hoy', saving: 'Guardando...', saved: 'Log diario de hoy guardado.',
+    downloadLogs: 'Descargar logs', downloading: 'Descargando...', downloadFailed: 'No se pudo descargar el log.',
+    fromDate: 'Desde', toDate: 'Hasta', filterByDate: 'Filtrar por fecha',
+    noDailyLogs: 'Aún no hay logs diarios para este rango de fechas.',
+    dailyDescription: 'Cada día se resume en un log con las acciones de cada usuario. Puedes guardar el de hoy manualmente y descargarlos filtrados por fecha.',
   },
   reports: {
     title: 'Reportes', subtitle: 'Consulta indicadores clave y exporta información operativa en CSV o Excel.',

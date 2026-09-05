@@ -6,6 +6,7 @@ import { setupAutoUpdater } from './updater';
 import { getDatabase, closeDatabase } from './db';
 import { ensureBootstrap } from './services/bootstrap.service';
 import { CashSessionService } from './services/cash-session.service';
+import { AuditService } from './services/audit.service';
 import { logger } from './utils/logger';
 
 process.stdout.on('error', (err) => {
@@ -148,6 +149,12 @@ app.whenReady().then(async () => {
     getDatabase();
     logger.info('Database initialized');
     await ensureBootstrap();
+
+    // Genera (si falta) el log diario de auditoría de los días ya terminados.
+    new AuditService()
+      .ensureDailyLogsForAllAccounts()
+      .then((count) => { if (count > 0) logger.info({ count }, 'Generated daily audit logs'); })
+      .catch((err) => logger.error({ err }, 'Daily audit log generation failed'));
   } catch (err) {
     logger.error({ err }, 'Failed to initialize database');
     dialog.showErrorBox(
