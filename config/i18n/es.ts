@@ -6,6 +6,13 @@ export const es = {
     yes: 'Sí', no: 'No', close: 'Cerrar', back: 'Volver', next: 'Siguiente',
     finish: 'Finalizar', required: 'Campo obligatorio',
   },
+  updater: {
+    downloading: 'Descargando actualización v{version}...',
+    downloaded: 'Actualización v{version} lista',
+    installOnQuit: 'Se instalará automáticamente al cerrar la aplicación.',
+    restartNow: 'Actualizar ahora',
+    later: 'Más tarde',
+  },
   payroll: {
     title: 'Nómina',
     subtitle: 'Resumen de horas trabajadas y compensación por empleado.',

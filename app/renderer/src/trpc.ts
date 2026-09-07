@@ -19,6 +19,7 @@ declare global {
       onCashSessionClosed: (callback: (info: { sessionIds: number[] }) => void) => () => void;
       downloadUpdate: () => Promise<{ success: boolean }>;
       installUpdate: () => Promise<{ success: boolean }>;
+      getAppVersion: () => Promise<string>;
       openFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
       showNotification: (title: string, body: string) => Promise<{ success: boolean; error?: string }>;
     };

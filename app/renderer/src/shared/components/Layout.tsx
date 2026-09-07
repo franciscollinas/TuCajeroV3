@@ -11,6 +11,7 @@ import type { Permission } from '../hooks/useRBAC';
 import { es } from '../i18n';
 import { AboutModal } from './AboutModal';
 import { GrainOverlay } from './GrainOverlay';
+import { UpdateBanner } from './UpdateBanner';
 
 interface LayoutProps { children: ReactNode; }
 
@@ -77,6 +78,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
     <div className={`tc-layout ${isCollapsed ? 'tc-layout--collapsed' : ''}`}>
       <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
       <GrainOverlay />
+      <UpdateBanner />
       <a href="#main-content" className="skip-link">Saltar al contenido principal</a>
       <aside className="tc-sidebar" role="navigation" aria-label="Navegación principal">
         <div className="tc-sidebar-header" style={{ justifyContent: isCollapsed ? 'center' : 'flex-start' }}>

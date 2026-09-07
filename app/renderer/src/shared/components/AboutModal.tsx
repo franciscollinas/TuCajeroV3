@@ -1,9 +1,21 @@
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { X, Info, Award } from 'lucide-react';
 
 interface AboutModalProps { open: boolean; onClose: () => void; }
 
 export const AboutModal = memo(function AboutModal({ open, onClose }: AboutModalProps): JSX.Element | null {
+  const [version, setVersion] = useState('3.0.0');
+
+  useEffect(() => {
+    let cancelled = false;
+    if (typeof window !== 'undefined' && window.api?.getAppVersion) {
+      window.api.getAppVersion().then((v) => {
+        if (!cancelled) setVersion(v);
+      }).catch(() => {});
+    }
+    return () => { cancelled = true; };
+  }, []);
+
   if (!open) return null;
 
   return (
@@ -20,7 +32,7 @@ export const AboutModal = memo(function AboutModal({ open, onClose }: AboutModal
           </div>
           <h2 className="text-2xl font-extrabold m-0">TuCajero</h2>
           <p className="text-sm opacity-85 mt-1">Sistema Punto de Venta para Pequeños Negocios</p>
-          <p className="text-xs opacity-70 mt-0.5">Versión 3.0.0</p>
+          <p className="text-xs opacity-70 mt-0.5">Versión {version}</p>
         </div>
         <div className="p-6">
           <div className="bg-gray-50 rounded-lg p-4 mb-5 border border-gray-200 text-center">

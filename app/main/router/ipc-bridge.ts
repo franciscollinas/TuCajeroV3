@@ -1,4 +1,4 @@
-import { ipcMain, shell, Notification } from 'electron';
+import { app, ipcMain, shell, Notification } from 'electron';
 import { appRouter } from './index';
 import { AuthService, AuthUser } from '../services/auth.service';
 import { logger } from '../utils/logger';
@@ -138,6 +138,8 @@ export function registerIpc(): void {
     installUpdate();
     return { success: true };
   });
+
+  ipcMain.handle('app:version', () => app.getVersion());
 
   ipcMain.handle('file:open', async (_event, filePath: string) => {
     if (!isPathAllowed(filePath)) {

@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld('api', {
   },
   downloadUpdate: () => ipcRenderer.invoke('update:download'),
   installUpdate: () => ipcRenderer.invoke('update:install'),
+  getAppVersion: () => ipcRenderer.invoke('app:version'),
   openFile: (filePath: string) => ipcRenderer.invoke('file:open', filePath),
   showNotification: (title: string, body: string) => ipcRenderer.invoke('notification:show', { title, body }),
 });

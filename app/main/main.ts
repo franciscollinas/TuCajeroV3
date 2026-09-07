@@ -112,9 +112,10 @@ function createWindow(): void {
     });
   }
 
-  // electron-updater solo cuenta con metadata de publicación en builds
-  // empaquetados; en desarrollo genera advertencias y no puede actualizar.
-  if (!isDev) setupAutoUpdater(mainWindow);
+// electron-updater solo cuenta con metadata de publicación en builds
+  // empaquetados; en desarrollo hay que activarlo explícitamente con
+  // TUCajero_TEST_UPDATE=1 (lee dev-app-update.yml) para probar el flujo.
+  if (!isDev || process.env.TUCajero_TEST_UPDATE === '1') setupAutoUpdater(mainWindow);
 }
 
 async function sweepInactiveCashSessions(): Promise<void> {

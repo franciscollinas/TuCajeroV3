@@ -1,11 +1,20 @@
 import { autoUpdater } from 'electron-updater';
-import { BrowserWindow } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import { logger } from '../utils/logger';
 
-let updateTimer: ReturnType<typeof setTimeout> | null = null;
+const INITIAL_CHECK_DELAY_MS = 5000;
+const DAILY_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+let initialCheckTimer: ReturnType<typeof setTimeout> | null = null;
+let dailyCheckTimer: ReturnType<typeof setInterval> | null = null;
+let checkInProgress = false;
+let updatePending = false;
 
 export function setupAutoUpdater(mainWindow: BrowserWindow): void {
-  autoUpdater.autoDownload = false;
+  if (!app.isPackaged) {
+    autoUpdater.forceDevUpdateConfig = true;
+  }
+  autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
   const onReady = () => { logger.info('Checking for updates...'); };
@@ -19,7 +28,10 @@ export function setupAutoUpdater(mainWindow: BrowserWindow): void {
   };
   autoUpdater.on('update-available', onAvailable);
 
-  const onNotAvailable = () => { logger.info('No updates available'); };
+  const onNotAvailable = () => {
+    logger.info('No updates available');
+    if (!mainWindow.isDestroyed()) mainWindow.webContents.send('update:not-available');
+  };
   autoUpdater.on('update-not-available', onNotAvailable);
 
   const onError = (err: Error) => {
@@ -40,20 +52,34 @@ export function setupAutoUpdater(mainWindow: BrowserWindow): void {
 
   const onDownloaded = () => {
     logger.info('Update downloaded');
+    updatePending = true;
     if (!mainWindow.isDestroyed()) mainWindow.webContents.send('update:downloaded');
   };
   autoUpdater.on('update-downloaded', onDownloaded);
 
-  updateTimer = setTimeout(() => {
-    updateTimer = null;
-    autoUpdater.checkForUpdates().catch((err) => { logger.warn({ err }, 'Failed to check for updates'); });
-  }, 5000);
+  const runCheck = () => {
+    if (checkInProgress || updatePending) return;
+    checkInProgress = true;
+    autoUpdater.checkForUpdates().catch((err) => {
+      logger.warn({ err }, 'Failed to check for updates');
+    }).finally(() => {
+      checkInProgress = false;
+    });
+  };
+
+  initialCheckTimer = setTimeout(() => {
+    initialCheckTimer = null;
+    runCheck();
+  }, INITIAL_CHECK_DELAY_MS);
+
+  dailyCheckTimer = setInterval(runCheck, DAILY_CHECK_INTERVAL_MS);
 
   mainWindow.on('closed', () => { cancelAutoUpdater(); });
 }
 
 export function cancelAutoUpdater(): void {
-  if (updateTimer) { clearTimeout(updateTimer); updateTimer = null; }
+  if (initialCheckTimer) { clearTimeout(initialCheckTimer); initialCheckTimer = null; }
+  if (dailyCheckTimer) { clearInterval(dailyCheckTimer); dailyCheckTimer = null; }
   autoUpdater.removeAllListeners();
 }
 
