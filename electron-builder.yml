@@ -26,6 +26,7 @@ asarUnpack:
 win:
   target:
     - nsis
+  artifactName: ${productName}-Setup-${version}.${ext}
   icon: build/icon.ico
 
 nsis:
@@ -44,6 +45,8 @@ publish:
   private: false
 
 compression: maximum
+
+buildDependenciesFromSource: true
 
 # Code signing configuration
 # electron-builder firma automáticamente cuando detecta credenciales en el
