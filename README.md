@@ -15,17 +15,16 @@ npm install
 npm run dev        # renderer (Vite) + proceso principal (Electron)
 ```
 
-La app lee `LICENSE_SECRET` del entorno del proceso principal. Para desarrollo,
-copia `.env.example` a `.env` y define el secreto (se carga automáticamente en
-`npm run dev`):
+La app valida licencias con firma **Ed25519** usando una clave pública embebida
+en el binario (`app/main/services/license-keys.ts`), por lo que no requiere
+ninguna variable de entorno para el sistema de licencias. Sin la clave pública
+la app no valida ninguna licencia (fail closed). El **KeyGen** firma con la clave
+privada correspondiente (`KeyGen/.env` → `LICENSE_PRIVATE_KEY`, nunca se distribuye):
 
 ```bash
-# .env
-LICENSE_SECRET=<secreto-de-al-menos-16-caracteres>
+# KeyGen/.env
+LICENSE_PRIVATE_KEY=<base64 PKCS8 de la clave privada Ed25519>
 ```
-
-Sin `LICENSE_SECRET` la app no valida ninguna licencia (fail closed). Debe ser el
-mismo secreto que el **KeyGen** (`KeyGen/.env`) usa para firmar licencias.
 
 ## Licencias
 
@@ -41,13 +40,9 @@ Ver `KeyGen/README.md` para los pasos del KeyGen.
 npm run dist      # instalador + portable
 ```
 
-En el binario empaquetado, `LICENSE_SECRET` se inyecta al arrancar como variable
-de entorno del proceso principal (no está embebido en el binario):
-
-```powershell
-$env:LICENSE_SECRET="<secreto>"
-.\TuCajero.exe
-```
+En el binario empaquetado la validación usa la clave pública embebida: el cliente
+instala y activa sin configuración adicional (no hace falta inyectar secretos al
+arrancar).
 
 ## Tests
 

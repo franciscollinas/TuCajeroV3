@@ -1,4 +1,4 @@
-import { createHmac, createHash, timingSafeEqual } from 'crypto';
+import { createHash, createPublicKey, timingSafeEqual, verify as verifySignature } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { app } from 'electron';
@@ -7,11 +7,22 @@ import { eq } from 'drizzle-orm';
 import { getDatabase, schema } from '../db';
 import { nowISO } from '../utils/date';
 import { AppError, ErrorCode } from '../utils/errors';
+import { resolveLicensePublicKey } from './license-keys';
 
-// Secreto de firma de licencias. Se inyecta vía entorno (LICENSE_SECRET); sin él
-// las licencias no se validan (fail closed), por lo que no es posible
-// falsificarlas usando un secreto conocido incrustado en el binario.
-const LICENSE_SECRET: string | undefined = process.env.LICENSE_SECRET;
+// Clave pública Ed25519 para verificar licencias. En el binario se usa la clave
+// embebida (license-keys.ts); se puede sobreescribir con LICENSE_PUBLIC_KEY
+// (base64 SPKI o PEM) para tests. El KeyGen firma con la clave privada
+// correspondiente, que nunca se distribuye ni se incrusta en la app.
+const LICENSE_PUBLIC_KEY = (() => {
+  const value = resolveLicensePublicKey();
+  if (!value) return null;
+  try {
+    if (value.includes('-----BEGIN')) return createPublicKey(value);
+    return createPublicKey({ key: Buffer.from(value, 'base64'), format: 'der', type: 'spki' });
+  } catch {
+    return null;
+  }
+})();
 
 const TRIAL_MS = 24 * 60 * 60 * 1000;
 
@@ -144,19 +155,24 @@ export class LicenseService {
   }
 
   validateLicense(license: LicenseData, currentFingerprint: string): LicenseValidation {
-    if (!LICENSE_SECRET) {
-      return { valid: false, reason: 'No hay un secreto de licencia configurado (LICENSE_SECRET).' };
+    if (!LICENSE_PUBLIC_KEY) {
+      return { valid: false, reason: 'No hay una clave pública de licencia configurada (LICENSE_PUBLIC_KEY).' };
     }
 
     if (!this.safeStringCompare(license.fingerprint, currentFingerprint)) {
       return { valid: false, reason: 'El fingerprint no coincide con este equipo.' };
     }
 
-    const expectedSignature = createHmac('sha256', LICENSE_SECRET)
-      .update(`${license.fingerprint}|${license.expiryDate}`)
-      .digest('hex');
+    let validSignature = false;
+    try {
+      const signature = Buffer.from(license.signature || '', 'base64');
+      const message = Buffer.from(`${license.fingerprint}|${license.expiryDate}`, 'utf8');
+      validSignature = signature.length > 0 && verifySignature(null, message, LICENSE_PUBLIC_KEY, signature);
+    } catch {
+      validSignature = false;
+    }
 
-    if (!this.safeStringCompare(license.signature, expectedSignature)) {
+    if (!validSignature) {
       return { valid: false, reason: 'La firma de la licencia no es válida.' };
     }
 

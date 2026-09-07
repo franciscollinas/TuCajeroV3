@@ -1,7 +1,5 @@
 import '@testing-library/jest-dom/vitest';
 
-process.env.LICENSE_SECRET = 'test-secret-for-unit-tests';
-
 const mockElectron = {
   app: {
     isPackaged: false,
