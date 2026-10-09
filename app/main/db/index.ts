@@ -5,6 +5,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import * as schema from '../../../database/schema/index';
 import { getDatabasePath, getMigrationsFolder } from '../utils/paths';
+import { ensureMoneyIntegers } from './money-integrity';
 
 let dbPath = getDatabasePath();
 let sqliteInstance: Database.Database | null = null;
@@ -27,6 +28,7 @@ export function getDatabase(): ReturnType<typeof drizzle> {
     ensureOptionalColumns(sqliteInstance);
     ensureTaxRateFraction(sqliteInstance);
     ensureDailyAuditTable(sqliteInstance);
+    ensureMoneyIntegers(sqliteInstance, `${dbPath}.pre-money-int.bak`);
 
     const integrityRow = sqliteInstance.pragma('integrity_check') as Array<{ integrity_check: string }> | { integrity_check: string };
     const integrityResult = Array.isArray(integrityRow) ? integrityRow[0]?.integrity_check : integrityRow?.integrity_check;

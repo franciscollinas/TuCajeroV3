@@ -13,6 +13,7 @@ import type {
   DailySummary,
   DashboardSummary,
 } from '../../renderer/src/shared/types/sales.types';
+import { lineAmount, percentOf, roundMoney } from '../utils/money';
 
 const auditService = new AuditService();
 
@@ -88,6 +89,9 @@ export class SalesService {
     branchId?: number,
     discountType: 'percentage' | 'fixed' = 'percentage',
   ): Promise<SaleRecord> {
+    items = items.map((i) => ({ ...i, unitPrice: roundMoney(i.unitPrice), discount: roundMoney(i.discount ?? 0) }));
+    payments = payments.map((p) => ({ ...p, amount: roundMoney(p.amount) }));
+    deliveryFee = roundMoney(deliveryFee);
     if (items.length === 0) {
       throw new AppError(ErrorCode.EMPTY_CART, 'El carrito está vacío.');
     }
@@ -160,32 +164,32 @@ export class SalesService {
       if (!product) {
         throw new AppError(ErrorCode.PRODUCT_NOT_FOUND, `Producto ${item.productId} no encontrado.`);
       }
-      const lineSubtotal = item.quantity * item.unitPrice;
+      const lineSubtotal = lineAmount(item.quantity, item.unitPrice);
       const lineNet = lineSubtotal - item.discount;
       subtotal += lineNet;
       if (ivaEnabled) {
-        tax += lineNet * (product.taxRate || 0);
+        tax += roundMoney(lineNet * (product.taxRate || 0));
       }
     }
 
-    const finalDiscount = discountType === 'percentage' ? (subtotal * discount) / 100 : discount;
+    const finalDiscount = discountType === 'percentage' ? percentOf(subtotal, discount) : roundMoney(discount);
     const total = subtotal + tax + deliveryFee - finalDiscount;
 
     const paidPayments = payments.filter((p) => p.method !== 'credito');
     const paidTotal = paidPayments.reduce((sum, p) => sum + p.amount, 0);
     const creditRemainder = isCreditSale && customerId ? Math.max(0, total - paidTotal) : 0;
 
-    const effectivePayments = creditRemainder > 0.01
+    const effectivePayments = creditRemainder > 0
       ? [...paidPayments, { method: 'credito' as const, amount: creditRemainder }]
       : paidPayments;
 
     const totalPaid = effectivePayments.reduce((sum, p) => sum + p.amount, 0);
     const change = totalPaid > total ? totalPaid - total : 0;
 
-    if (totalPaid < total - 0.01 && !isCreditSale) {
+    if (totalPaid < total && !isCreditSale) {
       throw new AppError(
         ErrorCode.PAYMENT_MISMATCH,
-        `Monto insuficiente. Total pagado (${totalPaid.toFixed(2)}) es menor al total (${total.toFixed(2)}).`,
+        `Monto insuficiente. Total pagado (${totalPaid}) es menor al total (${total}).`,
       );
     }
 
@@ -239,7 +243,7 @@ export class SalesService {
 
           for (const item of items) {
             const product = productMap.get(item.productId)!;
-            const lineSubtotal = item.quantity * item.unitPrice;
+            const lineSubtotal = lineAmount(item.quantity, item.unitPrice);
 
             tx.insert(schema.saleItems).values({
               saleId: created.id,
@@ -267,7 +271,7 @@ export class SalesService {
 
           if ((creditPayment || isCreditSale) && customerId) {
             const debtAmount = Math.max(0, total - paidTotal);
-            if (debtAmount > 0.01) {
+            if (debtAmount > 0) {
               tx.insert(schema.debts).values({
                 customerId,
                 accountId,

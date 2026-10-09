@@ -12,6 +12,7 @@ import type {
   ReceiveItemInput,
   PurchaseSummary,
 } from '../../renderer/src/shared/types/purchase.types';
+import { lineAmount, roundMoney } from '../utils/money';
 
 async function buildOrderNumber(accountId?: number | null): Promise<string> {
   const db = getDatabase();
@@ -271,7 +272,12 @@ export class PurchaseService {
       branchId = user?.branchId ?? undefined;
     }
 
-    const subtotal = data.items.reduce((sum, item) => sum + item.quantityOrdered * item.unitCost, 0);
+    data = {
+      ...data,
+      freight: data.freight === undefined ? undefined : roundMoney(data.freight),
+      items: data.items.map((item) => ({ ...item, unitCost: roundMoney(item.unitCost) })),
+    };
+    const subtotal = data.items.reduce((sum, item) => sum + lineAmount(item.quantityOrdered, item.unitCost), 0);
     const totalValue = subtotal + (data.freight ?? 0);
 
     const [order] = await db
@@ -301,7 +307,7 @@ export class PurchaseService {
         quantityOrdered: item.quantityOrdered,
         quantityReceived: 0,
         unitCost: item.unitCost,
-        total: item.quantityOrdered * item.unitCost,
+        total: lineAmount(item.quantityOrdered, item.unitCost),
         received: false,
       });
     }

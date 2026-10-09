@@ -1,5 +1,6 @@
 import { eq, and, gte, lte, sql } from 'drizzle-orm';
 import { getDatabase, schema } from '../db';
+import { roundMoney } from '../utils/money';
 
 type PayrollPeriod = 'daily' | 'weekly' | 'monthly';
 
@@ -139,7 +140,7 @@ export class PayrollService {
       const dayName = dayNames[dateObj.getDay()];
       const workedSeconds = Math.round(data.seconds);
       const workedHours = Math.round((data.seconds / 3600) * 100) / 100;
-      const payAmount = Math.round(workedHours * hourlyRate * 100) / 100;
+      const payAmount = roundMoney(workedHours * hourlyRate);
 
       const dailySalesResult = await db
         .select({ total: sql`COALESCE(SUM(${schema.sales.total}), 0)` })

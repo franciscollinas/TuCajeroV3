@@ -4,6 +4,7 @@ import { getDatabase, schema } from '../db';
 import { AppError, ErrorCode } from '../utils/errors';
 import { nowISO } from '../utils/date';
 import { AuditService } from './audit.service';
+import { roundMoney } from '../utils/money';
 
 const auditService = new AuditService();
 
@@ -241,6 +242,7 @@ export class CustomerService {
     accountId?: number | null,
     method: string = 'efectivo',
   ): Promise<CustomerDebt> {
+    amount = roundMoney(amount);
     const db = getDatabase();
     const now = nowISO();
 

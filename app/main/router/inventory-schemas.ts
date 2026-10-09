@@ -1,6 +1,7 @@
 import { z } from 'zod';
+import { roundMoney } from '../utils/money';
 
-const moneyAmount = z.number().finite().min(0).max(999_999_999);
+const moneyAmount = z.number().finite().min(0).max(999_999_999).transform(roundMoney);
 const nonNegativeQty = z.number().finite().min(0).max(9_999_999);
 const taxRateFraction = z.number().finite().min(0).max(1);
 

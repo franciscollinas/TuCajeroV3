@@ -10,6 +10,7 @@ import type {
   CashClosureRow,
   CashSessionSummary,
 } from '../../renderer/src/shared/types/cash.types';
+import { roundMoney } from '../utils/money';
 
 const auditService = new AuditService();
 
@@ -86,6 +87,7 @@ export class CashSessionService {
   }
 
   async openCashSession(accountId: number, userId: number, initialCash: number, branchId?: number): Promise<CashRegister> {
+    initialCash = roundMoney(initialCash);
     const db = getDatabase();
 
     if (branchId) {
@@ -142,6 +144,8 @@ export class CashSessionService {
     userId: number,
     reason?: string,
   ): Promise<CashCloseSummary> {
+    finalCash = roundMoney(finalCash);
+    expectedCash = roundMoney(expectedCash);
     const db = getDatabase();
 
     const [session] = await db
