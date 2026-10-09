@@ -422,7 +422,7 @@ export default function CashRegisterPage(): JSX.Element {
                       <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         type="number"
-                        step="0.01"
+                        step="1"
                         min="0"
                         value={expenseAmount}
                         onChange={(e) => setExpenseAmount(e.target.value)}
@@ -448,7 +448,7 @@ export default function CashRegisterPage(): JSX.Element {
                       <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         type="number"
-                        step="0.01"
+                        step="1"
                         min="0"
                         value={finalCash}
                         onChange={(e) => setFinalCash(e.target.value)}
@@ -476,7 +476,7 @@ export default function CashRegisterPage(): JSX.Element {
                     <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                       type="number"
-                      step="0.01"
+                      step="1"
                       min="0"
                       value={initialCash}
                       onChange={(e) => setInitialCash(e.target.value)}

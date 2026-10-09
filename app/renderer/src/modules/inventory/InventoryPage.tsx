@@ -661,7 +661,7 @@ export default function InventoryPage(): JSX.Element {
             <label className="tc-label">{es.inventory.price} *</label>
             <input
               type="number"
-              step="0.01"
+              step="1"
               min="0"
               value={formData.price}
               onChange={(e) => setFormData({ ...formData, price: e.target.value })}
@@ -673,7 +673,7 @@ export default function InventoryPage(): JSX.Element {
             <label className="tc-label">{es.inventory.cost} *</label>
             <input
               type="number"
-              step="0.01"
+              step="1"
               min="0"
               value={formData.cost}
               onChange={(e) => setFormData({ ...formData, cost: e.target.value })}

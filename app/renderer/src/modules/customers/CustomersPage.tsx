@@ -615,7 +615,7 @@ export default function CustomersPage(): JSX.Element {
               <label className="block text-sm font-medium text-gray-700 mb-1">Monto a pagar</label>
               <input
                 type="number"
-                step="0.01"
+                step="1"
                 min="0"
                 max={payDebtTarget.remaining}
                 value={payAmount}

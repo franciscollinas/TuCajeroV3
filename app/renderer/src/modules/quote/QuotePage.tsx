@@ -407,7 +407,7 @@ export default function QuotePage(): JSX.Element {
                           </td>
                           <td>
                             <input
-                              type="number" step="0.01" min="0"
+                              type="number" step="1" min="0"
                               className="tc-input"
                               value={item.unitPrice}
                               onChange={(e) => setFormItems(formItems.map((i) => i.productId === item.productId ? { ...i, unitPrice: Number(e.target.value) || 0 } : i))}
@@ -416,7 +416,7 @@ export default function QuotePage(): JSX.Element {
                           </td>
                           <td>
                             <input
-                              type="number" step="0.01" min="0"
+                              type="number" step="1" min="0"
                               className="tc-input"
                               value={item.discount}
                               onChange={(e) => setFormItems(formItems.map((i) => i.productId === item.productId ? { ...i, discount: Number(e.target.value) || 0 } : i))}
@@ -442,11 +442,11 @@ export default function QuotePage(): JSX.Element {
               <div style={{ display: 'flex', gap: 'var(--space-6)', justifyContent: 'flex-end', alignItems: 'flex-end', flexWrap: 'wrap' }}>
                 <div className="tc-field" style={{ width: 160 }}>
                   <label className="tc-label">{es.quote.deliveryFee}</label>
-                  <input type="number" step="0.01" min="0" className="tc-input" value={formDelivery} onChange={(e) => setFormDelivery(Number(e.target.value) || 0)} placeholder={es.quote.deliveryFeePlaceholder} />
+                  <input type="number" step="1" min="0" className="tc-input" value={formDelivery} onChange={(e) => setFormDelivery(Number(e.target.value) || 0)} placeholder={es.quote.deliveryFeePlaceholder} />
                 </div>
                 <div className="tc-field" style={{ width: 160 }}>
                   <label className="tc-label">{es.quote.globalDiscount}</label>
-                  <input type="number" step="0.01" min="0" className="tc-input" value={formDiscount} onChange={(e) => setFormDiscount(Number(e.target.value) || 0)} placeholder={es.quote.globalDiscountPlaceholder} />
+                  <input type="number" step="1" min="0" className="tc-input" value={formDiscount} onChange={(e) => setFormDiscount(Number(e.target.value) || 0)} placeholder={es.quote.globalDiscountPlaceholder} />
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--gray-500)' }}>{es.quote.subtotal}</div>
@@ -489,7 +489,7 @@ export default function QuotePage(): JSX.Element {
                   <select className="tc-input" value={p.method} onChange={(e) => setConvertPayments(convertPayments.map((pp, j) => j === i ? { ...pp, method: e.target.value as PaymentMethod } : pp))} style={{ flex: 1 }}>
                     {PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
                   </select>
-                  <input type="number" step="0.01" min="0" className="tc-input" value={p.amount} onChange={(e) => setConvertPayments(convertPayments.map((pp, j) => j === i ? { ...pp, amount: Number(e.target.value) || 0 } : pp))} style={{ width: 120 }} placeholder="Monto" />
+                  <input type="number" step="1" min="0" className="tc-input" value={p.amount} onChange={(e) => setConvertPayments(convertPayments.map((pp, j) => j === i ? { ...pp, amount: Number(e.target.value) || 0 } : pp))} style={{ width: 120 }} placeholder="Monto" />
                   <input type="text" className="tc-input" value={p.reference} onChange={(e) => setConvertPayments(convertPayments.map((pp, j) => j === i ? { ...pp, reference: e.target.value } : pp))} style={{ width: 100 }} placeholder="Ref." />
                   <button type="button" onClick={() => setConvertPayments(convertPayments.filter((_, j) => j !== i))} className="tc-btn--ghost" style={{ color: 'var(--red-500)', padding: 4 }}>
                     <X size={14} />
