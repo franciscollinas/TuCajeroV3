@@ -20,6 +20,7 @@ const dir = join(tmpdir(), `tucajero-stress-${Date.now()}`);
 const dbPath = join(dir, 'stress.db');
 process.env.DATABASE_URL = dbPath;
 
+const { roundMoney } = await import('../app/main/utils/money');
 const { SalesService } = await import('../app/main/services/sales.service');
 const { CashSessionService } = await import('../app/main/services/cash-session.service');
 const { CashExpenseService } = await import('../app/main/services/cash-expense.service');
@@ -189,8 +190,8 @@ function seedProducts(count: number) {
   const db = getDatabase();
   for (let i = 0; i < count; i++) {
     const catId = (i % 3) + 1;
-    const price = randFloat(500, 50000);
-    const cost = +(price * randFloat(0.3, 0.8)).toFixed(2);
+    const price = Math.round(randFloat(500, 50000));
+    const cost = Math.round(price * randFloat(0.3, 0.8));
     const stock = randInt(0, 200);
     const taxRate = pick([0, 0.05, 0.08, 0.19]);
     const expiryDate = rand() > 0.7
@@ -447,7 +448,7 @@ stressDescribe('TuCajero V3 — 50k Stress Test Suite', () => {
 
           const sale = await salesService.createSale(session.id, 2, items, payments, 1, discount, 0, undefined, false, undefined, discountType);
           expect(sale).toBeDefined();
-          expect(Number(sale.discount)).toBeCloseTo(effectiveDiscount, 0);
+          expect(Number(sale.discount)).toBe(roundMoney(effectiveDiscount));
           recordPass('sales', 'discount');
 
           await cashSessionService.closeCashSession(session.id, total, total, 1, 2);
@@ -666,7 +667,7 @@ stressDescribe('TuCajero V3 — 50k Stress Test Suite', () => {
           const amount = randFloat(100, 50000);
           const expense = await cashExpenseService.createExpense(session.id, 2, amount, `Gasto stress ${i}`, 1);
           expect(expense).toBeDefined();
-          expect(Number(expense.amount)).toBe(amount);
+          expect(Number(expense.amount)).toBe(roundMoney(amount));
           recordPass('cash', 'expense_valid');
 
           await cashSessionService.closeCashSession(session.id, 0, 0, 1, 2);

@@ -24,3 +24,8 @@ nul
 
 # Debug / reproduction scripts
 repro2.ts
+
+# Salidas generadas, respaldos locales y bundle de depuracion
+exports/
+backups/
+router-test2.cjs

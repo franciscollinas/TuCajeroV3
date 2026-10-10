@@ -6,6 +6,7 @@ import { AuditService } from './audit.service';
 import { SalesService } from './sales.service';
 import { ConfigService } from './config.service';
 import type { SaleRecord, SaleItem, CartItemInput } from '../../renderer/src/shared/types/sales.types';
+import { lineAmount, roundMoney } from '../utils/money';
 
 const auditService = new AuditService();
 const salesService = new SalesService();
@@ -217,6 +218,9 @@ export class QuoteService {
     deliveryFee = 0,
     _notes?: string,
   ): Promise<SaleRecord> {
+    items = items.map((i) => ({ ...i, unitPrice: roundMoney(i.unitPrice), discount: roundMoney(i.discount ?? 0) }));
+    discount = roundMoney(discount);
+    deliveryFee = roundMoney(deliveryFee);
     if (items.length === 0) {
       throw new AppError(ErrorCode.EMPTY_CART, 'La cotización debe tener al menos un producto.');
     }
@@ -242,8 +246,8 @@ export class QuoteService {
 
         if (!product) throw new AppError(ErrorCode.NOT_FOUND, `Producto #${item.productId} no encontrado`);
 
-        const lineSubtotal = item.unitPrice * item.quantity;
-        const lineTax = ivaEnabled ? lineSubtotal * (product.taxRate || 0) : 0;
+        const lineSubtotal = lineAmount(item.quantity, item.unitPrice);
+        const lineTax = ivaEnabled ? roundMoney(lineSubtotal * (product.taxRate || 0)) : 0;
         const lineTotal = lineSubtotal - (item.discount ?? 0);
 
         subtotal += lineSubtotal;
@@ -310,6 +314,9 @@ export class QuoteService {
     discount?: number,
     deliveryFee?: number,
   ): Promise<SaleRecord> {
+    items = items.map((i) => ({ ...i, unitPrice: roundMoney(i.unitPrice), discount: roundMoney(i.discount ?? 0) }));
+    if (discount !== undefined) discount = roundMoney(discount);
+    if (deliveryFee !== undefined) deliveryFee = roundMoney(deliveryFee);
     const db = getDatabase();
 
     const [existing] = await db
@@ -341,8 +348,8 @@ export class QuoteService {
 
         if (!product) throw new AppError(ErrorCode.NOT_FOUND, `Producto #${item.productId} no encontrado`);
 
-        const lineSubtotal = item.unitPrice * item.quantity;
-        const lineTax = ivaEnabled ? lineSubtotal * (product.taxRate || 0) : 0;
+        const lineSubtotal = lineAmount(item.quantity, item.unitPrice);
+        const lineTax = ivaEnabled ? roundMoney(lineSubtotal * (product.taxRate || 0)) : 0;
         const lineTotal = lineSubtotal - (item.discount ?? 0);
 
         subtotal += lineSubtotal;
@@ -425,6 +432,7 @@ export class QuoteService {
     payments: { method: string; amount: number; reference?: string }[],
     accountId: number,
   ): Promise<SaleRecord> {
+    payments = payments.map((p) => ({ ...p, amount: roundMoney(p.amount) }));
     const db = getDatabase();
 
     const [existing] = await db

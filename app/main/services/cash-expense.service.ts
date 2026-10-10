@@ -4,6 +4,7 @@ import { getDatabase, schema } from '../db';
 import { AppError, ErrorCode } from '../utils/errors';
 import { nowISO } from '../utils/date';
 import type { CashExpense } from '../../renderer/src/shared/types/cash.types';
+import { roundMoney } from '../utils/money';
 
 export class CashExpenseService {
   async createExpense(
@@ -13,6 +14,7 @@ export class CashExpenseService {
     reason: string,
     accountId: number,
   ): Promise<CashExpense> {
+    amount = roundMoney(amount);
     const db = getDatabase();
 
     const [session] = await db

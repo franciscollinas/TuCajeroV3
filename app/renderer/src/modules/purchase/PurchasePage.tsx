@@ -614,7 +614,7 @@ export default function PurchasePage(): JSX.Element {
                       placeholder="Cant."
                     />
                     <input
-                      type="number" min="0" step="0.01" value={item.unitCost}
+                      type="number" min="0" step="1" value={item.unitCost}
                       onChange={(e) => updateOrderItem(i, 'unitCost', Number(e.target.value))}
                       className="w-28 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                       placeholder="Costo"
@@ -632,7 +632,7 @@ export default function PurchasePage(): JSX.Element {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Flete</label>
               <input
-                type="number" min="0" step="0.01" value={orderFormFreight}
+                type="number" min="0" step="1" value={orderFormFreight}
                 onChange={(e) => setOrderFormFreight(Number(e.target.value))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />

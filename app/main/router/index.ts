@@ -23,6 +23,7 @@ import { MigrationService } from '../services/migration.service';
 import { LicenseService } from '../services/license.service';
 import { PrinterService } from '../services/printer.service';
 import { DianService } from '../services/dian.service';
+import { roundMoney } from '../utils/money';
 
 
 const authService = new AuthService();
@@ -79,8 +80,8 @@ function requireRole(...allowedRoles: UserRole[]) {
 const adminOnly = authenticatedProcedure.use(requireRole('ADMIN'));
 const adminOrSupervisor = authenticatedProcedure.use(requireRole('ADMIN', 'SUPERVISOR'));
 
-const moneyAmount = z.number().finite().min(0).max(999_999_999);
-const positiveMoney = z.number().finite().positive().max(999_999_999);
+const moneyAmount = z.number().finite().min(0).max(999_999_999).transform(roundMoney);
+const positiveMoney = z.number().finite().positive().max(999_999_999).transform(roundMoney).pipe(z.number().positive());
 const nonNegativeQty = z.number().finite().min(0).max(9_999_999);
 
 function requireAccountId(ctx: { user: AuthUser }): number {
@@ -297,7 +298,7 @@ export const customerRouter = t.router({
 
 export const salesRouter = t.router({
    create: authenticatedProcedure
-     .input(z.object({ cashSessionId: z.number(), userId: z.number(), items: z.array(z.object({ productId: z.number(), quantity: nonNegativeQty, unitPrice: moneyAmount, discount: moneyAmount })), payments: z.array(z.object({ method: z.enum(['efectivo', 'nequi', 'daviplata', 'tarjeta', 'transferencia', 'credito']), amount: positiveMoney, reference: z.string().optional() })), discount: moneyAmount.optional(), deliveryFee: moneyAmount.optional(), customerId: z.number().optional(), branchId: z.number().optional(), isCreditSale: z.boolean().optional(), discountType: z.enum(["percentage", "fixed"]).optional() }))
+     .input(z.object({ cashSessionId: z.number(), userId: z.number(), items: z.array(z.object({ productId: z.number(), quantity: nonNegativeQty, unitPrice: moneyAmount, discount: moneyAmount })), payments: z.array(z.object({ method: z.enum(['efectivo', 'nequi', 'daviplata', 'tarjeta', 'transferencia', 'credito']), amount: positiveMoney, reference: z.string().optional() })), discount: z.number().finite().min(0).max(999_999_999).optional(), deliveryFee: moneyAmount.optional(), customerId: z.number().optional(), branchId: z.number().optional(), isCreditSale: z.boolean().optional(), discountType: z.enum(["percentage", "fixed"]).optional() }))
       .mutation(async ({ input, ctx }) => {
        return salesService.createSale(input.cashSessionId, ctx.user.id, input.items, input.payments, requireAccountId(ctx), input.discount, input.deliveryFee, input.customerId, input.isCreditSale ?? false, input.branchId, input.discountType ?? "percentage");
      }),
@@ -363,13 +364,13 @@ export const usersRouter = t.router({
     }),
 
   create: adminOnly
-    .input(z.object({ data: z.object({ username: z.string(), password: z.string(), fullName: z.string(), role: z.enum(['ADMIN', 'CASHIER', 'SUPERVISOR']), hourlyRate: z.number().optional() }) }))
+    .input(z.object({ data: z.object({ username: z.string(), password: z.string(), fullName: z.string(), role: z.enum(['ADMIN', 'CASHIER', 'SUPERVISOR']), hourlyRate: moneyAmount.optional() }) }))
     .mutation(async ({ input, ctx }) => {
       return usersService.createUser({ ...input.data, accountId: requireAccountId(ctx), actorUserId: ctx.user.id });
     }),
 
   update: adminOnly
-    .input(z.object({ id: z.number(), data: z.object({ fullName: z.string().optional(), role: z.enum(['ADMIN', 'CASHIER', 'SUPERVISOR']).optional(), password: z.string().optional(), active: z.boolean().optional(), hourlyRate: z.number().optional() }) }))
+    .input(z.object({ id: z.number(), data: z.object({ fullName: z.string().optional(), role: z.enum(['ADMIN', 'CASHIER', 'SUPERVISOR']).optional(), password: z.string().optional(), active: z.boolean().optional(), hourlyRate: moneyAmount.optional() }) }))
     .mutation(async ({ input, ctx }) => {
       return usersService.updateUser(input.id, { ...input.data, actorUserId: ctx.user.id }, requireAccountId(ctx));
     }),

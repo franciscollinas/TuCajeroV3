@@ -18,6 +18,7 @@ import type {
   BulkImportRow,
   BulkImportResult,
 } from '../../renderer/src/shared/types/inventory.types';
+import { roundMoney } from '../utils/money';
 
 const auditService = new AuditService();
 const COVERAGE_DAYS = 30;
@@ -517,8 +518,8 @@ export class InventoryService {
         name: data.name,
         description: data.description ?? null,
         categoryId,
-        price: data.price,
-        cost: data.cost,
+        price: roundMoney(data.price),
+        cost: roundMoney(data.cost),
         stock: data.stock,
         minStock: data.minStock ?? 5,
         criticalStock: data.criticalStock ?? 2,
@@ -609,8 +610,8 @@ export class InventoryService {
           name: safeData.name,
           description: safeData.description ?? undefined,
           categoryId,
-          price: safeData.price,
-          cost: safeData.cost,
+          price: safeData.price === undefined ? undefined : roundMoney(safeData.price),
+          cost: safeData.cost === undefined ? undefined : roundMoney(safeData.cost),
           minStock: safeData.minStock,
           criticalStock: safeData.criticalStock,
           taxRate: safeData.taxRate,
@@ -884,8 +885,8 @@ export class InventoryService {
             const updateData: Record<string, unknown> = {
               name: item.name,
               categoryId: category!.id,
-              price: parseImportNumber(item.price),
-              cost: parseImportNumber(item.cost),
+              price: roundMoney(parseImportNumber(item.price)),
+              cost: roundMoney(parseImportNumber(item.cost)),
               updatedAt: now,
             };
 
@@ -936,8 +937,8 @@ tx.insert(schema.products)
                 name: item.name,
                 description: item.description || null,
                 categoryId: category!.id,
-                price: parseImportNumber(item.price),
-                cost: parseImportNumber(item.cost),
+                price: roundMoney(parseImportNumber(item.price)),
+                cost: roundMoney(parseImportNumber(item.cost)),
                 stock: csvStock,
                 minStock: Math.trunc(parseImportNumber(item.minStock, 5)),
                 criticalStock: Math.trunc(parseImportNumber(item.criticalStock, 2)),

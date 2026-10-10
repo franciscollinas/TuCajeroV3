@@ -259,7 +259,7 @@ export default function DashboardPage(): JSX.Element {
                   <div className="mt-2 flex flex-col gap-2 animate-slideDown">
                     <div className="relative">
                       <DollarSign size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input type="number" step="0.01" min="0" value={finalCash} onChange={(e) => setFinalCash(e.target.value)} placeholder={es.cash.finalCash} className="pl-7 pr-2 py-1.5 border border-gray-300 rounded-lg text-sm w-full focus:outline-none focus:ring-2 focus:ring-red-500" autoFocus />
+                      <input type="number" step="1" min="0" value={finalCash} onChange={(e) => setFinalCash(e.target.value)} placeholder={es.cash.finalCash} className="pl-7 pr-2 py-1.5 border border-gray-300 rounded-lg text-sm w-full focus:outline-none focus:ring-2 focus:ring-red-500" autoFocus />
                     </div>
                     <div className="flex gap-2">
                       <button onClick={handleCloseCash} disabled={cashLoading || !finalCash} className="flex-1 inline-flex justify-center items-center gap-1.5 px-2 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white text-xs font-semibold rounded-lg transition-colors">
@@ -289,7 +289,7 @@ export default function DashboardPage(): JSX.Element {
                 <div className="mt-2 flex flex-col gap-2">
                   <div className="relative">
                     <DollarSign size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input type="number" step="0.01" min="0" value={initialCash} onChange={(e) => setInitialCash(e.target.value)} placeholder={es.cashSession.openAmount} className="pl-7 pr-2 py-1.5 border border-gray-300 rounded-lg text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <input type="number" step="1" min="0" value={initialCash} onChange={(e) => setInitialCash(e.target.value)} placeholder={es.cashSession.openAmount} className="pl-7 pr-2 py-1.5 border border-gray-300 rounded-lg text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                   </div>
                   <button onClick={handleOpenCash} disabled={cashLoading || !initialCash} className="w-full inline-flex justify-center items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-xs font-bold rounded-lg transition-colors">
                     {cashLoading ? <LoadingSpinner size={14} /> : <Unlock size={14} />}

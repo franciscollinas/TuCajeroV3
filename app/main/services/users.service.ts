@@ -6,6 +6,7 @@ import { AppError, ErrorCode } from '../utils/errors';
 import { validatePassword } from '../utils/password';
 import { nowISO } from '../utils/date';
 import { AuditService } from './audit.service';
+import { roundMoney } from '../utils/money';
 
 const auditService = new AuditService();
 const BCRYPT_ROUNDS = 12;
@@ -80,7 +81,7 @@ export class UsersService {
         role: data.role,
         active: true,
         mustChangePassword: true,
-        hourlyRate: data.hourlyRate ?? 15000,
+        hourlyRate: roundMoney(data.hourlyRate ?? 15000),
         createdAt: now,
         updatedAt: now,
       })
@@ -127,7 +128,7 @@ export class UsersService {
     if (data.fullName !== undefined) updateData.fullName = data.fullName.trim();
     if (data.role !== undefined) updateData.role = data.role;
     if (data.active !== undefined) updateData.active = data.active;
-    if (data.hourlyRate !== undefined) updateData.hourlyRate = data.hourlyRate;
+    if (data.hourlyRate !== undefined) updateData.hourlyRate = roundMoney(data.hourlyRate);
 
     if (data.password) {
       validatePassword(data.password);

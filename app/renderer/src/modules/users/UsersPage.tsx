@@ -328,7 +328,7 @@ export default function UsersPage(): JSX.Element {
               <input
                 type="number"
                 min="0"
-                step="0.01"
+                step="1"
                 value={form.hourlyRate}
                 onChange={(e) => setForm((p) => ({ ...p, hourlyRate: Number(e.target.value) }))}
                 className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
