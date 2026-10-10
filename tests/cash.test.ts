@@ -274,16 +274,30 @@ serviceDescribe('Bloque D: aislamiento de sesión y ownership', () => {
   it('closeCashSession requiere userId — no se puede cerrar caja ajena', async () => {
     const db = getDatabase();
 
-    db.insert(schema.cashSessions)
-      .values({ accountId: 1, userId: 2, initialCash: 10000, status: 'OPEN', openedAt: NOW })
+    // Usuario y caja propios del test: no depende de datos de otros tests.
+    db.insert(schema.users)
+      .values({
+        accountId: 1,
+        username: 'otro-cajero',
+        password: 'hash',
+        fullName: 'Otro Cajero',
+        role: 'CASHIER',
+        active: true,
+        createdAt: NOW,
+        updatedAt: NOW,
+      })
       .run();
+    const otherUser = db.select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.username, 'otro-cajero'))
+      .get()!;
 
-    const [otherSession] = db.select({ id: schema.cashSessions.id })
-      .from(schema.cashSessions)
-      .where(and(eq(schema.cashSessions.userId, 2), eq(schema.cashSessions.status, 'OPEN')))
-      .limit(1)
-      .all();
+    const otherSession = db.insert(schema.cashSessions)
+      .values({ accountId: 1, userId: otherUser.id, initialCash: 10000, status: 'OPEN', openedAt: NOW })
+      .returning({ id: schema.cashSessions.id })
+      .get();
 
+    // El usuario 1 intenta cerrar la caja abierta por otro usuario.
     await expect(
       cashSessionService.closeCashSession(otherSession.id, 0, 0, 1, 1),
     ).rejects.toMatchObject({ code: ErrorCode.FORBIDDEN });

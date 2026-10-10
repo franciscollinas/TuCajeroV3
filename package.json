@@ -20,6 +20,7 @@
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:stress": "vitest run --config vitest.stress.config.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit push",
     "db:seed": "npx tsx scripts/seed.ts",
