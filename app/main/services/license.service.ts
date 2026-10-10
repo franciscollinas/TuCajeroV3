@@ -8,6 +8,7 @@ import { getDatabase, schema } from '../db';
 import { nowISO } from '../utils/date';
 import { AppError, ErrorCode } from '../utils/errors';
 import { resolveLicensePublicKey } from './license-keys';
+import { decodeActivationCode, looksLikeActivationCode } from './license-code';
 
 // Clave pública Ed25519 para verificar licencias. En el binario se usa la clave
 // embebida (license-keys.ts); se puede sobreescribir con LICENSE_PUBLIC_KEY
@@ -115,22 +116,50 @@ export class LicenseService {
     }
   }
 
+  // Acepta la clave corta del KeyGen (TC1-XXXXX-…) o, para licencias ya emitidas,
+  // el JSON completo { fingerprint, expiryDate, signature }.
   async activateLicense(licenseKey: string): Promise<LicenseValidation> {
-    let licenseData: LicenseData;
-    try {
-      licenseData = JSON.parse(licenseKey) as LicenseData;
-      if (!licenseData.fingerprint || !licenseData.expiryDate || !licenseData.signature) {
-        throw new Error('Formato inválido');
+    const input = licenseKey.trim();
+    const isCode = looksLikeActivationCode(input);
+
+    let parsed: LicenseData | null = null;
+    let decoded: ReturnType<typeof decodeActivationCode> = null;
+    if (isCode) {
+      decoded = decodeActivationCode(input);
+      if (!decoded) {
+        throw new AppError(
+          ErrorCode.VALIDATION,
+          'La clave está incompleta o tiene errores. Cópiela de nuevo completa, desde TC1- hasta el final.',
+        );
       }
-    } catch {
-      throw new AppError(ErrorCode.VALIDATION, 'Formato de licencia inválido. Copie el JSON completo generado por keygen.');
+    } else {
+      try {
+        parsed = JSON.parse(input) as LicenseData;
+        if (!parsed.fingerprint || !parsed.expiryDate || !parsed.signature) {
+          throw new Error('Formato inválido');
+        }
+      } catch {
+        throw new AppError(
+          ErrorCode.VALIDATION,
+          'Formato de licencia inválido. Pegue la clave completa (empieza por TC1-) o el JSON completo generado por el KeyGen.',
+        );
+      }
     }
 
     const hw = await this.generateFingerprint();
 
+    // La clave corta no trae la huella: se asume la de este equipo, de modo que
+    // solo valida si fue firmada para él.
+    const licenseData: LicenseData = decoded ? { fingerprint: hw.fingerprint, ...decoded } : (parsed as LicenseData);
+    const storedValue = decoded ? JSON.stringify(licenseData) : licenseKey;
+
     const validation = this.validateLicense(licenseData, hw.fingerprint);
     if (!validation.valid) {
-      throw new AppError(ErrorCode.VALIDATION, validation.reason ?? 'Licencia inválida.');
+      const reason =
+        decoded && validation.reason?.includes('firma')
+          ? 'La clave no es válida para este equipo. Compruebe que la huella (fingerprint) enviada sea la de esta computadora y que la clave esté completa.'
+          : (validation.reason ?? 'Licencia inválida.');
+      throw new AppError(ErrorCode.VALIDATION, reason);
     }
 
     const db = getDatabase();
@@ -143,12 +172,12 @@ export class LicenseService {
     if (existing[0]) {
       await db
         .update(schema.configs)
-        .set({ value: licenseKey, updatedAt: nowISO() })
+        .set({ value: storedValue, updatedAt: nowISO() })
         .where(eq(schema.configs.key, 'license_data'));
     } else {
       await db
         .insert(schema.configs)
-        .values({ key: 'license_data', value: licenseKey, updatedAt: nowISO() });
+        .values({ key: 'license_data', value: storedValue, updatedAt: nowISO() });
     }
 
     return validation;
