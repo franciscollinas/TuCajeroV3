@@ -53,6 +53,18 @@ describe('IPC Bridge Security', () => {
       expect(ALLOWED_PROCEDURE_PATHS.has('sales.getById')).toBe(true);
     });
 
+    it('contains the reports procedures', () => {
+      expect(ALLOWED_PROCEDURE_PATHS.has('reports.general')).toBe(true);
+    });
+
+    it('lists every procedure of the router (no one forgotten)', async () => {
+      const { appRouter } = await import('../app/main/router/index');
+      const procedures = Object.keys((appRouter as unknown as { _def: { procedures: Record<string, unknown> } })._def.procedures);
+      expect(procedures.length).toBeGreaterThan(50);
+      const missing = procedures.filter((path) => !ALLOWED_PROCEDURE_PATHS.has(path));
+      expect(missing).toEqual([]);
+    });
+
     it('does not contain unregistered procedures', () => {
       expect(ALLOWED_PROCEDURE_PATHS.has('evil.deleteAll')).toBe(false);
       expect(ALLOWED_PROCEDURE_PATHS.has('admin.secret')).toBe(false);
