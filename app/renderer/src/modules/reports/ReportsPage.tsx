@@ -16,7 +16,7 @@ import { Card } from '../../shared/components/Card';
 import { StatusBadge } from '../../shared/components/StatusBadge';
 import { LoadingSpinner } from '../../shared/components/LoadingSpinner';
 import { EmptyState } from '../../shared/components/EmptyState';
-import type { SaleRecord } from '../../shared/types/sales.types';
+import type { GeneralReport } from '../../../../main/services/reports.service';
 import type { StockAlerts, ExpiryAlerts, NoRotationProduct } from '../../shared/types/inventory.types';
 import type { CashClosureRow } from '../../shared/types/cash.types';
 
@@ -45,11 +45,8 @@ export default function ReportsPage(): JSX.Element {
   const [expiryData, setExpiryData] = useState<ExpiryAlerts | null>(null);
   const [closures, setClosures] = useState<CashClosureRow[]>([]);
   const [auditRecords, setAuditRecords] = useState<AuditEntry[]>([]);
-  const [inventoryValue, setInventoryValue] = useState(0);
   const [noRotation, setNoRotation] = useState<NoRotationProduct[]>([]);
-  const [prevRevenue, setPrevRevenue] = useState(0);
-  const [prevSales, setPrevSales] = useState(0);
-  const [periodSales, setPeriodSales] = useState<SaleRecord[]>([]);
+  const [general, setGeneral] = useState<GeneralReport | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,49 +54,23 @@ export default function ReportsPage(): JSX.Element {
       setLoading(true);
       setReportError(null);
       try {
-        const start = new Date(`${startDate}T12:00:00`);
-        const end = new Date(`${endDate}T12:00:00`);
-        const periodDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1);
-        const previousStartDate = new Date(start);
-        previousStartDate.setDate(previousStartDate.getDate() - periodDays);
-        const previousEndDate = new Date(start);
-        previousEndDate.setDate(previousEndDate.getDate() - 1);
-        const previousSalesPromise = trpc.sales.getByDateRange.query({
-          startDate: toLocalDateInput(previousStartDate),
-          endDate: toLocalDateInput(previousEndDate),
-        });
-        const [stockAlerts, expiryAlerts, closuresData, inventoryData, auditData, noRotationData, currentSalesData] = await Promise.all([
+        // Los totales, gráficos y comparación con el periodo anterior se calculan
+        // en el servidor: no se descargan ventas ni inventario completos.
+        const [stockAlerts, expiryAlerts, closuresData, auditData, noRotationData, generalData] = await Promise.all([
           trpc.inventory.getStockAlerts.query(),
           trpc.inventory.getExpiryAlerts.query(),
           trpc.cash.listClosures.query(),
-          trpc.inventory.getAll.query({}),
           trpc.audit.list.query({ limit: 20, startDate, endDate }),
           trpc.inventory.getNoRotation.query(),
-          trpc.sales.getByDateRange.query({ startDate, endDate }),
+          trpc.reports.general.query({ startDate, endDate }),
         ]);
         if (cancelled) return;
         setStockData(stockAlerts as StockAlerts | null);
         setExpiryData(expiryAlerts as ExpiryAlerts | null);
         setClosures(closuresData as CashClosureRow[]);
         setAuditRecords(auditData as AuditEntry[]);
-        if (inventoryData) {
-          const data = inventoryData as { products: Array<{ stock: number; cost: number }> };
-          const totalValue = data.products?.reduce((sum, p) => sum + (p.stock * p.cost), 0) ?? 0;
-          setInventoryValue(totalValue);
-        }
         setNoRotation(noRotationData as NoRotationProduct[]);
-        setPeriodSales((currentSalesData as SaleRecord[]).filter((sale) => sale.status === 'COMPLETED'));
-
-        try {
-          const prevSalesData = await previousSalesPromise;
-          const prevSalesArr = (prevSalesData as SaleRecord[]).filter((sale) => sale.status === 'COMPLETED');
-          const totalPrevRevenue = prevSalesArr.reduce((s, x) => s + Number(x.total ?? 0), 0);
-          const totalPrevCount = prevSalesArr.length;
-          setPrevRevenue(totalPrevRevenue);
-          setPrevSales(totalPrevCount);
-        } catch (prevErr) {
-          rendererLogger.error('ReportsPage', 'Error loading previous period:', prevErr);
-        }
+        setGeneral(generalData);
       } catch (err) {
         rendererLogger.error('ReportsPage', 'Error loading report data:', err);
         if (!cancelled) setReportError(err instanceof Error ? err.message : 'No se pudo cargar el reporte.');
@@ -111,39 +82,21 @@ export default function ReportsPage(): JSX.Element {
     return () => { cancelled = true; };
   }, [startDate, endDate]);
 
-  const totalSales = periodSales.length;
-  const netRevenue = periodSales.reduce((sum, sale) => sum + Number(sale.total), 0);
-  const avgTicket = totalSales > 0 ? netRevenue / totalSales : 0;
+  const totalSales = general?.current.sales ?? 0;
+  const netRevenue = general?.current.revenue ?? 0;
+  const avgTicket = general?.current.avgTicket ?? 0;
+  const inventoryValue = general?.inventoryValue ?? 0;
+  const prevSales = general?.previous.sales ?? 0;
+  const prevRevenue = general?.previous.revenue ?? 0;
 
   const stockAlertsTotal = (stockData?.critical.length ?? 0) + (stockData?.warning.length ?? 0);
   const expiryAlertsTotal = (expiryData?.expired.length ?? 0) + (expiryData?.expiringSoon.length ?? 0);
 
-  // El gráfico también se deriva del período elegido, no del resumen mensual.
-  const salesData = Array.from(periodSales.reduce((byDay, sale) => {
-    const day = sale.createdAt.slice(0, 10);
-    const entry = byDay.get(day) ?? { name: day, ventas: 0, ingresos: 0 };
-    entry.ventas += 1;
-    entry.ingresos += Number(sale.total);
-    byDay.set(day, entry);
-    return byDay;
-  }, new Map<string, { name: string; ventas: number; ingresos: number }>()).values());
-  const totalSalesInPeriod = salesData.reduce((sum, d) => sum + d.ventas, 0);
-  const totalRevenueInPeriod = salesData.reduce((sum, d) => sum + d.ingresos, 0);
-  const paymentMethods = Array.from(periodSales.reduce((methods, sale) => {
-    for (const payment of sale.payments) {
-      methods.set(payment.method, (methods.get(payment.method) ?? 0) + Number(payment.amount));
-    }
-    return methods;
-  }, new Map<string, number>()).entries()).map(([method, total]) => ({ method, label: method, total }));
-  const topProducts = Array.from(periodSales.reduce((products, sale) => {
-    for (const item of sale.items) {
-      const current = products.get(item.productId) ?? { id: item.productId, name: item.product?.name ?? `Producto #${item.productId}`, quantity: 0, total: 0 };
-      current.quantity += Number(item.quantity);
-      current.total += Number(item.total);
-      products.set(item.productId, current);
-    }
-    return products;
-  }, new Map<number, { id: number; name: string; quantity: number; total: number }>()).values()).sort((a, b) => b.total - a.total).slice(0, 10);
+  const salesData = (general?.salesByDay ?? []).map((d) => ({ name: d.date, ventas: d.sales, ingresos: d.revenue }));
+  const totalSalesInPeriod = totalSales;
+  const totalRevenueInPeriod = netRevenue;
+  const paymentMethods = (general?.paymentMix ?? []).map((p) => ({ method: p.method, label: p.label, total: p.total }));
+  const topProducts = (general?.topProducts ?? []).map((p) => ({ id: p.id, name: p.name, quantity: p.quantity, total: p.total }));
 
   const handleExport = async (format: 'csv' | 'xlsx') => {
     setExporting(format);
