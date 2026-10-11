@@ -66,3 +66,24 @@ npm run typecheck        # proyecto completo
 npm run typecheck:main   # solo proceso principal
 npm run lint
 ```
+
+## Historial de demostración
+
+Para ver los reportes y gráficos con datos realistas (y medir rendimiento) hay un
+generador reproducible de ventas, cajas y egresos. **Úsalo siempre sobre una copia
+de la base**, nunca sobre la de uso real:
+
+```bash
+# 1. copia la base (con catálogo y, si quieres usar la app, con licencia activa)
+copy database	ucajero.db copia-demo.db          # PowerShell / cmd
+# 2. agrega 42 días de historial
+npm run db:seed-demo -- --db copia-demo.db
+# 3. abre la app apuntando a la copia
+$env:DATABASE_URL="copia-demo.db"; npm run dev     # PowerShell
+```
+
+Opciones: `--days <n>`, `--end AAAA-MM-DD`, `--seed <n>` (misma semilla, mismos datos) y
+`--replace` para regenerar. Las ventas se numeran `DEMO-0001…` y solo se borran las
+propias. Si la base no tiene productos, siembra antes el catálogo con
+`node scripts/run-with-electron.cjs scripts/seed-mockup.cjs`.
+
