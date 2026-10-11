@@ -1,5 +1,5 @@
 import { rendererLogger } from '../../shared/utils/rendererLogger';
-import { useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import {
   BarChart3, TrendingUp, DollarSign, Package,
   ShoppingCart, Download, FileSpreadsheet, AlertTriangle,
@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import { trpc } from '../../trpc';
 import { formatCompactCurrency, formatCurrency, formatDate, formatDateTime, toLocalDateInput } from '../../shared/utils/formatters';
+import { auditActionLabel, auditDetailPairs } from '../../shared/utils/auditFormat';
 import { es } from '../../shared/i18n';
 import { Card } from '../../shared/components/Card';
 import { StatusBadge } from '../../shared/components/StatusBadge';
@@ -19,6 +20,9 @@ import { EmptyState } from '../../shared/components/EmptyState';
 import type { GeneralReport } from '../../../../main/services/reports.service';
 import type { StockAlerts, ExpiryAlerts, NoRotationProduct } from '../../shared/types/inventory.types';
 import type { CashClosureRow } from '../../shared/types/cash.types';
+
+// El gráfico de ventas se descarga solo cuando se muestra (recharts pesa bastante).
+const SalesTrendChart = lazy(() => import('../../shared/components/SalesTrendChart'));
 
 type ReportTab = 'general' | 'ventas' | 'inventario' | 'caja' | 'auditoria';
 
@@ -262,19 +266,9 @@ export default function ReportsPage(): JSX.Element {
           <Card title={es.reports.salesSection}>
             {salesData.length > 0 ? (
               <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={salesData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                    <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} formatter={(value: number, name: string) => {
-                      if (name === 'ingresos') return [formatCurrency(value), 'Ingresos'];
-                      return [value, 'Ventas'];
-                    }} />
-                    <Bar dataKey="ventas" fill="#6366f1" radius={[4, 4, 0, 0]} name="ventas" />
-                    <Bar dataKey="ingresos" fill="#10b981" radius={[4, 4, 0, 0]} name="ingresos" />
-                  </BarChart>
-                </ResponsiveContainer>
+                <Suspense fallback={<LoadingSpinner />}>
+                  <SalesTrendChart data={salesData} />
+                </Suspense>
               </div>
             ) : (
               <EmptyState icon={BarChart3} title={es.reports.noData} className="py-8" />
@@ -289,7 +283,7 @@ export default function ReportsPage(): JSX.Element {
                   <BarChart data={paymentMethods} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={64} tickFormatter={(v: number) => formatCompactCurrency(v)} />
                     <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }} formatter={(value: number) => [formatCurrency(value), 'Total']} />
                     <Bar dataKey="total" radius={[4, 4, 0, 0]} name="total">
                     {paymentMethods.map((entry, index) => (
@@ -358,8 +352,8 @@ export default function ReportsPage(): JSX.Element {
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={salesData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} minTickGap={12} />
+                    <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={64} tickFormatter={(v: number) => formatCompactCurrency(v)} />
                     <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }} formatter={(value: number) => [formatCurrency(value), 'Ingresos']} />
                     <Line type="monotone" dataKey="ingresos" stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} />
                   </LineChart>
@@ -544,7 +538,12 @@ export default function ReportsPage(): JSX.Element {
                         <td className={`px-4 py-3 text-sm font-semibold border-b border-gray-100 text-right whitespace-nowrap ${diff !== null && diff !== 0 ? (diff > 0 ? 'text-green-600' : 'text-red-600') : 'text-gray-400'}`}>
                           {diff !== null ? `${diff > 0 ? '+' : ''}${formatCurrency(diff)}` : '—'}
                         </td>
-                        <td className="px-4 py-3 border-b border-gray-100"><StatusBadge status={c.status} /></td>
+                        <td className="px-4 py-3 border-b border-gray-100">
+                          <StatusBadge status={c.status} />
+                          {c.status !== 'OPEN' && c.finalCash === null && (
+                            <span className="ml-2 text-xs font-medium text-amber-600" title="Se cerró sola por inactividad, sin conteo de efectivo">Cierre automático</span>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
@@ -577,9 +576,15 @@ export default function ReportsPage(): JSX.Element {
                     <tr key={r.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm text-gray-700 border-b border-gray-100 whitespace-nowrap">{formatDateTime(r.date)}</td>
                       <td className="px-4 py-3 text-sm text-gray-700 border-b border-gray-100">{r.user}</td>
-                      <td className="px-4 py-3 border-b border-gray-100"><StatusBadge status={r.action} /></td>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-800 border-b border-gray-100">{auditActionLabel(r.action)}</td>
                       <td className="px-4 py-3 text-sm text-gray-700 border-b border-gray-100">{r.entity}</td>
-                      <td className="px-4 py-3 text-sm text-gray-500 border-b border-gray-100 max-w-xs truncate">{r.details}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 border-b border-gray-100">
+                        {auditDetailPairs(r.details).map((p) => (
+                          <span key={p.label} className="mr-3 inline-block whitespace-nowrap">
+                            <span className="text-gray-400">{p.label}:</span> {p.value}
+                          </span>
+                        ))}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
