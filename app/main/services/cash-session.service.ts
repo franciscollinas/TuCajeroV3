@@ -1,4 +1,4 @@
-import { eq, and, desc, sum, gte, isNull, lte, or } from 'drizzle-orm';
+import { eq, and, desc, sum, count, gte, isNull, lte, or } from 'drizzle-orm';
 
 import { getDatabase, schema } from '../db';
 import { AppError, ErrorCode } from '../utils/errors';
@@ -9,6 +9,7 @@ import type {
   CashCloseSummary,
   CashClosureRow,
   CashSessionSummary,
+  CashSessionOverview,
 } from '../../renderer/src/shared/types/cash.types';
 import { roundMoney } from '../utils/money';
 
@@ -70,6 +71,7 @@ export class CashSessionService {
 
     return rows.map((r) => ({
       id: r.id,
+      autoClosed: r.finalCash === null,
       initialCash: r.initialCash,
       finalCash: r.finalCash,
       expectedCash: r.expectedCash,
@@ -333,6 +335,69 @@ export class CashSessionService {
     summary.credito = creditPayments;
 
     return summary as unknown as CashSessionSummary;
+  }
+
+  /**
+   * Resumen de una sesión: ventas, cobros por método (neto del cambio), egresos y
+   * el efectivo esperado. Es lo de ESTA caja, a diferencia de los totales del día.
+   * Con `userId` solo se ve una sesión propia (cajeros).
+   */
+  async getSessionOverview(sessionId: number, accountId: number, userId?: number): Promise<CashSessionOverview> {
+    const db = getDatabase();
+
+    const [session] = await db
+      .select({
+        id: schema.cashSessions.id,
+        initialCash: schema.cashSessions.initialCash,
+        expectedCash: schema.cashSessions.expectedCash,
+      })
+      .from(schema.cashSessions)
+      .where(
+        and(
+          eq(schema.cashSessions.id, sessionId),
+          eq(schema.cashSessions.accountId, accountId),
+          ...(userId ? [eq(schema.cashSessions.userId, userId)] : []),
+        ),
+      )
+      .limit(1);
+
+    if (!session) {
+      throw new AppError(ErrorCode.NOT_FOUND, 'Sesión de caja no encontrada.');
+    }
+
+    const [summary, [salesAgg], [expensesAgg]] = await Promise.all([
+      this.getCashSessionSummary(sessionId, accountId),
+      db
+        .select({ count: count(schema.sales.id).mapWith(Number), total: sum(schema.sales.total).mapWith(Number) })
+        .from(schema.sales)
+        .where(and(eq(schema.sales.cashSessionId, sessionId), eq(schema.sales.status, 'COMPLETED'))),
+      db
+        .select({ count: count(schema.cashExpenses.id).mapWith(Number), total: sum(schema.cashExpenses.amount).mapWith(Number) })
+        .from(schema.cashExpenses)
+        .where(eq(schema.cashExpenses.cashSessionId, sessionId)),
+    ]);
+
+    const payments: Record<string, number> = {};
+    for (const [method, amount] of Object.entries(summary as unknown as Record<string, number>)) {
+      if (method === 'total' || method === 'efectivoBruto' || method === 'cambio') continue;
+      payments[method] = roundMoney(Number(amount));
+    }
+
+    const cashCollected = payments.efectivo ?? 0;
+    const expensesTotal = roundMoney(expensesAgg?.total ?? 0);
+    return {
+      sessionId,
+      initialCash: session.initialCash,
+      salesCount: salesAgg?.count ?? 0,
+      salesTotal: roundMoney(salesAgg?.total ?? 0),
+      payments,
+      cashCollected,
+      creditSales: payments.credito ?? 0,
+      expensesCount: expensesAgg?.count ?? 0,
+      expensesTotal,
+      expectedCash: session.expectedCash ?? session.initialCash,
+      computedExpectedCash: session.initialCash + cashCollected - expensesTotal,
+    };
   }
 
   async getTodaySalesTotal(userId: number): Promise<number> {

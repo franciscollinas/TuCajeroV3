@@ -1,8 +1,8 @@
 import { rendererLogger } from '../../shared/utils/rendererLogger';
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   DollarSign, Lock, Unlock, Receipt, Plus, X,
-  TrendingUp, History, Wallet, PiggyBank, Timer, AlertTriangle,
+  TrendingUp, History, Timer, AlertTriangle, CheckCircle2,
 } from 'lucide-react';
 import { trpc } from '../../trpc';
 import { useAuth } from '../../shared/context/AuthContext';
@@ -12,67 +12,110 @@ import { Card } from '../../shared/components/Card';
 import { LoadingButton } from '../../shared/components/LoadingButton';
 import { DataTable } from '../../shared/components/DataTable';
 import type { Column } from '../../shared/components/DataTable';
-import type { CashRegister, CashClosureRow, CashExpense } from '../../shared/types/cash.types';
+import { StatusBadge } from '../../shared/components/StatusBadge';
+import { useCloseCash } from '../../shared/hooks/useCloseCash';
+import { EXPENSE_CONCEPTS, parseExpenseReason } from '../../shared/types/cash.types';
+import type {
+  CashRegister, CashClosureRow, CashExpense, CashSessionOverview, CashCloseSummary, ExpenseConcept,
+} from '../../shared/types/cash.types';
+
+const PAYMENT_ORDER = ['efectivo', 'transferencia', 'nequi', 'daviplata', 'tarjeta', 'credito'];
+const PAYMENT_LABELS: Record<string, string> = {
+  efectivo: 'Efectivo (neto)',
+  transferencia: 'Transferencia',
+  nequi: 'Nequi',
+  daviplata: 'Daviplata',
+  tarjeta: 'Tarjeta',
+  credito: 'Crédito (fiado)',
+};
+const PAYMENT_COLORS: Record<string, { bg: string; text: string }> = {
+  efectivo: { bg: 'bg-emerald-50', text: 'text-emerald-700' },
+  tarjeta: { bg: 'bg-blue-50', text: 'text-blue-700' },
+  nequi: { bg: 'bg-purple-50', text: 'text-purple-700' },
+  daviplata: { bg: 'bg-cyan-50', text: 'text-cyan-700' },
+  transferencia: { bg: 'bg-orange-50', text: 'text-orange-700' },
+  credito: { bg: 'bg-rose-50', text: 'text-rose-700' },
+};
 
 export default function CashRegisterPage(): JSX.Element {
   const { user, currentBranch } = useAuth();
 
   const [session, setSession] = useState<CashRegister | null>(null);
+  const [overview, setOverview] = useState<CashSessionOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [cashLoading, setCashLoading] = useState(false);
 
   const [initialCash, setInitialCash] = useState('');
   const [finalCash, setFinalCash] = useState('');
+  const [lastClosure, setLastClosure] = useState<CashCloseSummary | null>(null);
 
   const [todaySales, setTodaySales] = useState(0);
-  const [todayExpenses, setTodayExpenses] = useState(0);
   const [expenses, setExpenses] = useState<CashExpense[]>([]);
   const [closures, setClosures] = useState<CashClosureRow[]>([]);
 
-  const [paymentsByMethod, setPaymentsByMethod] = useState<Record<string, number>>({});
   const [sessionDuration, setSessionDuration] = useState('');
   const [isMultiDay, setIsMultiDay] = useState(false);
 
   const [showAddExpense, setShowAddExpense] = useState(false);
-  const [expenseReason, setExpenseReason] = useState('');
+  const [expenseConcept, setExpenseConcept] = useState<ExpenseConcept | ''>('');
+  const [expenseNote, setExpenseNote] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
   const [expenseLoading, setExpenseLoading] = useState(false);
+  const [expenseError, setExpenseError] = useState<string | null>(null);
 
   const [showClosures, setShowClosures] = useState(false);
   const [exportingClosures, setExportingClosures] = useState(false);
+
+  const branchId = currentBranch?.id;
+
+  // Datos de la sesión activa: resumen de la sesión, egresos, ventas del día y cierres.
+  const loadSessionData = useCallback(
+    async (active: CashRegister): Promise<void> => {
+      if (!user) return;
+      const [sessionOverview, expensesList, closuresList, salesTotal] = await Promise.all([
+        trpc.cash.getSessionOverview.query({ sessionId: active.id }),
+        trpc.cash.listExpenses.query({ sessionId: active.id }),
+        trpc.cash.listClosures.query({ branchId }),
+        trpc.cash.getTodaySalesTotal.query({ userId: user.id }),
+      ]);
+      setOverview(sessionOverview);
+      setExpenses(expensesList as CashExpense[]);
+      setClosures(closuresList as CashClosureRow[]);
+      setTodaySales(Number(salesTotal ?? 0));
+    },
+    [user, branchId],
+  );
+
+  const refreshOverview = useCallback(
+    async (sessionId: number): Promise<void> => {
+      const [sessionOverview, expensesList] = await Promise.all([
+        trpc.cash.getSessionOverview.query({ sessionId }),
+        trpc.cash.listExpenses.query({ sessionId }),
+      ]);
+      setOverview(sessionOverview);
+      setExpenses(expensesList as CashExpense[]);
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
     const fetchData = async () => {
       try {
         if (!user) return;
-        const branchId = currentBranch?.id;
         const activeSession = await trpc.cash.getActive.query({ userId: user.id, branchId }) as CashRegister | null;
         if (cancelled) return;
         setSession(activeSession);
 
         if (activeSession) {
-          const [salesTotal, expensesTotal, expensesList, closuresList, payments] = await Promise.all([
-            trpc.cash.getTodaySalesTotal.query({ userId: user.id }),
-            trpc.cash.getTodayExpenses.query({ userId: user.id }),
-            trpc.cash.listExpenses.query({ sessionId: activeSession.id }),
-            trpc.cash.listClosures.query({ branchId }),
-            trpc.cash.getTodayPaymentsByMethod.query({ userId: user.id }),
-          ]);
+          await loadSessionData(activeSession);
           if (cancelled) return;
-          setTodaySales(Number(salesTotal ?? 0));
-          setTodayExpenses(Number(expensesTotal ?? 0));
-          setExpenses(expensesList as CashExpense[]);
-          setClosures(closuresList as CashClosureRow[]);
-          setPaymentsByMethod(payments as Record<string, number>);
-
-          // Multi-day check
           const openedAt = new Date(activeSession.openedAt);
           const today = new Date();
           setIsMultiDay(
             openedAt.getDate() !== today.getDate() ||
             openedAt.getMonth() !== today.getMonth() ||
-            openedAt.getFullYear() !== today.getFullYear()
+            openedAt.getFullYear() !== today.getFullYear(),
           );
         } else {
           const closuresList = await trpc.cash.listClosures.query({ branchId });
@@ -87,7 +130,7 @@ export default function CashRegisterPage(): JSX.Element {
     };
     fetchData();
     return () => { cancelled = true; };
-  }, [user, currentBranch]);
+  }, [user, branchId, loadSessionData]);
 
   // Session timer
   useEffect(() => {
@@ -104,27 +147,33 @@ export default function CashRegisterPage(): JSX.Element {
     return () => clearInterval(timer);
   }, [session]);
 
+  const handleClosed = useCallback(
+    (summary: CashCloseSummary): void => {
+      setSession(null);
+      setOverview(null);
+      setExpenses([]);
+      setFinalCash('');
+      setLastClosure(summary);
+      trpc.cash.listClosures.query({ branchId }).then((list) => setClosures(list as CashClosureRow[])).catch((err) => {
+        rendererLogger.error('CashRegisterPage', 'Error refreshing closures:', err);
+      });
+    },
+    [branchId],
+  );
+
+  const { requestClose, closeDialog } = useCloseCash(handleClosed);
+
   const handleOpenCash = async () => {
     if (!user) return;
     const amount = Number(initialCash);
     if (!amount || amount <= 0) return;
     setCashLoading(true);
     try {
-      const result = await trpc.cash.open.mutate({ userId: user.id, initialCash: amount, branchId: currentBranch?.id }) as CashRegister;
+      const result = await trpc.cash.open.mutate({ userId: user.id, initialCash: amount, branchId }) as CashRegister;
       setSession(result);
       setInitialCash('');
-      const [salesTotal, expensesTotal, expensesList, closuresList, payments] = await Promise.all([
-        trpc.cash.getTodaySalesTotal.query({ userId: user.id }),
-        trpc.cash.getTodayExpenses.query({ userId: user.id }),
-        trpc.cash.listExpenses.query({ sessionId: result.id }),
-        trpc.cash.listClosures.query({ branchId: currentBranch?.id }),
-        trpc.cash.getTodayPaymentsByMethod.query({ userId: user.id }),
-      ]);
-      setTodaySales(Number(salesTotal ?? 0));
-      setTodayExpenses(Number(expensesTotal ?? 0));
-      setExpenses(expensesList as CashExpense[]);
-      setClosures(closuresList as CashClosureRow[]);
-      setPaymentsByMethod(payments as Record<string, number>);
+      setLastClosure(null);
+      await loadSessionData(result);
     } catch (err) {
       rendererLogger.error('CashRegisterPage', 'Error opening cash:', err);
       alert(err instanceof Error ? err.message : 'No se pudo abrir la caja.');
@@ -136,15 +185,10 @@ export default function CashRegisterPage(): JSX.Element {
   const handleCloseCash = async () => {
     if (!session) return;
     const amount = Number(finalCash);
-    if (amount < 0) return;
+    if (!Number.isFinite(amount) || amount < 0 || finalCash === '') return;
     setCashLoading(true);
     try {
-      const expectedCash = session.expectedCash ?? session.initialCash;
-      await trpc.cash.close.mutate({ sessionId: session.id, finalCash: amount, expectedCash });
-      setSession(null);
-      setFinalCash('');
-      const closuresList = await trpc.cash.listClosures.query({ branchId: currentBranch?.id });
-      setClosures(closuresList as CashClosureRow[]);
+      await requestClose(session.id, amount);
     } catch (err) {
       rendererLogger.error('CashRegisterPage', 'Error closing cash:', err);
       alert(err instanceof Error ? err.message : 'No se pudo cerrar la caja.');
@@ -167,39 +211,66 @@ export default function CashRegisterPage(): JSX.Element {
     }
   };
 
+  const resetExpenseForm = (): void => {
+    setShowAddExpense(false);
+    setExpenseConcept('');
+    setExpenseNote('');
+    setExpenseAmount('');
+    setExpenseError(null);
+  };
+
   const handleAddExpense = async () => {
-    if (!session || !expenseReason.trim() || !expenseAmount) return;
-    if (!user) return;
+    if (!session || !user || !expenseConcept) return;
     const amount = Number(expenseAmount);
     if (!amount || amount <= 0) return;
+    if (expenseConcept === 'Otro' && !expenseNote.trim()) {
+      setExpenseError('Describe el egreso cuando eliges «Otro».');
+      return;
+    }
     setExpenseLoading(true);
+    setExpenseError(null);
     try {
       await trpc.cash.createExpense.mutate({
         sessionId: session.id,
         userId: user.id,
-        reason: expenseReason.trim(),
         amount,
+        concept: expenseConcept,
+        note: expenseNote.trim() || undefined,
       });
-      setExpenseReason('');
-      setExpenseAmount('');
-      setShowAddExpense(false);
-      const [expensesList, expensesTotal] = await Promise.all([
-        trpc.cash.listExpenses.query({ sessionId: session.id }),
-        trpc.cash.getTodayExpenses.query({ userId: user.id }),
-      ]);
-      setExpenses(expensesList as CashExpense[]);
-      setTodayExpenses(Number(expensesTotal ?? 0));
+      resetExpenseForm();
+      // Refresca también el esperado de la sesión.
+      const active = await trpc.cash.getActive.query({ userId: user.id, branchId }) as CashRegister | null;
+      if (active) setSession(active);
+      await refreshOverview(session.id);
     } catch (err) {
       rendererLogger.error('CashRegisterPage', 'Error adding expense:', err);
+      setExpenseError(err instanceof Error ? err.message : 'No se pudo registrar el egreso.');
     } finally {
       setExpenseLoading(false);
     }
   };
 
-  const expectedCash = session ? (session.expectedCash ?? session.initialCash) : 0;
+  const expectedCash = overview?.expectedCash ?? (session ? (session.expectedCash ?? session.initialCash) : 0);
+  const expectedMismatch = overview !== null && overview.computedExpectedCash !== overview.expectedCash;
+
+  const paymentTiles = overview
+    ? PAYMENT_ORDER.filter((m) => m === 'efectivo' || (overview.payments[m] ?? 0) !== 0)
+        .concat(Object.keys(overview.payments).filter((m) => !PAYMENT_ORDER.includes(m) && overview.payments[m] !== 0))
+    : [];
 
   const expenseColumns: Column<CashExpense>[] = [
-    { key: 'reason', header: 'Razón' },
+    {
+      key: 'reason', header: 'Concepto',
+      render: (row) => {
+        const { concept, note } = parseExpenseReason(row.reason);
+        return (
+          <div>
+            <span className="font-medium text-gray-800">{concept}</span>
+            {note && <span className="block text-xs text-gray-500">{note}</span>}
+          </div>
+        );
+      },
+    },
     {
       key: 'amount', header: 'Monto',
       render: (row) => <span className="font-semibold text-red-600">{formatCurrency(row.amount)}</span>,
@@ -216,12 +287,14 @@ export default function CashRegisterPage(): JSX.Element {
       render: (row) => row.user.fullName,
     },
     {
-      key: 'initialCash', header: 'Apertura',
+      key: 'initialCash', header: 'Inicial',
       render: (row) => formatCurrency(row.initialCash),
     },
     {
-      key: 'finalCash', header: 'Cierre',
-      render: (row) => row.finalCash != null ? formatCurrency(row.finalCash) : '--',
+      key: 'finalCash', header: 'Contado',
+      render: (row) => row.autoClosed
+        ? <StatusBadge status="warning" variant="warning" label="Cierre automático" />
+        : row.finalCash != null ? formatCurrency(row.finalCash) : '--',
     },
     {
       key: 'expectedCash', header: 'Esperado',
@@ -230,17 +303,17 @@ export default function CashRegisterPage(): JSX.Element {
     {
       key: 'difference', header: 'Diferencia',
       render: (row) => {
-        if (row.difference == null) return '--';
-        const color = row.difference >= 0 ? 'text-green-600' : 'text-red-600';
+        if (row.difference == null) return row.autoClosed ? <span className="text-xs text-gray-400">Sin conteo</span> : '--';
+        const color = row.difference === 0 ? 'text-gray-500' : row.difference > 0 ? 'text-green-600' : 'text-red-600';
         return <span className={`font-semibold ${color}`}>{formatCurrency(row.difference)}</span>;
       },
     },
     {
-      key: 'openedAt', header: 'Apertura',
+      key: 'openedAt', header: 'Abierta',
       render: (row) => formatDateTime(row.openedAt),
     },
     {
-      key: 'closedAt', header: 'Cierre',
+      key: 'closedAt', header: 'Cerrada',
       render: (row) => row.closedAt ? formatDateTime(row.closedAt) : '--',
     },
   ];
@@ -259,6 +332,30 @@ export default function CashRegisterPage(): JSX.Element {
         <h1 className="text-2xl font-bold text-gray-900">Gestión de Caja</h1>
         <p className="text-sm text-gray-500 mt-1">{es.cash.overview}</p>
       </div>
+
+      {lastClosure && !session && (
+        <div role="status" className="flex items-start justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+          <div className="flex items-start gap-3">
+            <CheckCircle2 size={20} className="mt-0.5 shrink-0 text-emerald-600" />
+            <div>
+              <p className="text-sm font-semibold text-emerald-900">Caja cerrada</p>
+              <p className="text-sm text-emerald-800">
+                Esperado {formatCurrency(lastClosure.expectedCash)} · Contado {formatCurrency(lastClosure.finalCash)} ·{' '}
+                {lastClosure.difference === 0 ? (
+                  <strong>sin diferencia</strong>
+                ) : (
+                  <strong className={lastClosure.difference < 0 ? 'text-red-700' : 'text-amber-700'}>
+                    diferencia {lastClosure.difference > 0 ? '+' : '-'}{formatCurrency(Math.abs(lastClosure.difference))}
+                  </strong>
+                )}
+              </p>
+            </div>
+          </div>
+          <button type="button" onClick={() => setLastClosure(null)} className="text-emerald-700 hover:text-emerald-900" aria-label="Cerrar aviso">
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -282,21 +379,40 @@ export default function CashRegisterPage(): JSX.Element {
           >
             {session ? (
               <div className="space-y-5">
-                {/* Summary */}
+                {/* Summary of THIS session */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="bg-gray-50 rounded-xl p-4">
                     <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Inicial</p>
                     <p className="text-xl font-bold text-gray-900">{formatCurrency(session.initialCash)}</p>
                   </div>
                   <div className="bg-blue-50 rounded-xl p-4">
-                    <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Esperado</p>
+                    <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Efectivo esperado</p>
                     <p className="text-xl font-bold text-blue-700">{formatCurrency(expectedCash)}</p>
                   </div>
-                  <div className="bg-green-50 rounded-xl p-4">
-                    <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Actual</p>
-                    <p className="text-xl font-bold text-green-700">{formatCurrency(expectedCash)}</p>
+                  <div className="bg-emerald-50 rounded-xl p-4">
+                    <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Ventas de la sesión</p>
+                    <p className="text-xl font-bold text-emerald-700">{formatCurrency(overview?.salesTotal ?? 0)}</p>
+                    <p className="text-xs text-emerald-700/80 mt-0.5">{overview?.salesCount ?? 0} venta{overview?.salesCount === 1 ? '' : 's'}</p>
                   </div>
                 </div>
+
+                {overview && (
+                  <p className="text-xs text-gray-500">
+                    Inicial <strong className="text-gray-700">{formatCurrency(overview.initialCash)}</strong>
+                    {' + '}efectivo cobrado <strong className="text-gray-700">{formatCurrency(overview.cashCollected)}</strong>
+                    {' − '}egresos <strong className="text-gray-700">{formatCurrency(overview.expensesTotal)}</strong>
+                    {' = '}<strong className="text-blue-700">{formatCurrency(overview.computedExpectedCash)}</strong>
+                  </p>
+                )}
+
+                {expectedMismatch && overview && (
+                  <div role="alert" className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2">
+                    <AlertTriangle size={16} className="text-red-600 mt-0.5 flex-shrink-0" />
+                    <p className="text-xs text-red-800">
+                      El efectivo esperado registrado ({formatCurrency(overview.expectedCash)}) no coincide con el cálculo de esta pantalla ({formatCurrency(overview.computedExpectedCash)}). Revisa las ventas y los egresos antes de cerrar.
+                    </p>
+                  </div>
+                )}
 
                 <div className="text-xs text-gray-400 flex items-center gap-1">
                   <History size={12} />
@@ -318,52 +434,21 @@ export default function CashRegisterPage(): JSX.Element {
                   </div>
                 )}
 
-                {/* Today's totals */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-xl">
-                    <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-                      <TrendingUp size={20} className="text-emerald-600" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 font-medium">Ventas hoy</p>
-                      <p className="text-lg font-bold text-emerald-700">{formatCurrency(todaySales)}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-red-50 rounded-xl">
-                    <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
-                      <Receipt size={20} className="text-red-600" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 font-medium">Gastos hoy</p>
-                      <p className="text-lg font-bold text-red-700">{formatCurrency(todayExpenses)}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Payment method breakdown */}
-                {Object.keys(paymentsByMethod).length > 0 && (
+                {/* Collected in this session, by method */}
+                {overview && paymentTiles.length > 0 && (
                   <div>
                     <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-3">
                       <DollarSign size={16} />
-                      Desglose de pagos
+                      Cobrado en esta sesión
                     </h4>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {Object.entries(paymentsByMethod).map(([method, amount]) => {
-                        const colors: Record<string, { bg: string; text: string }> = {
-                          efectivo: { bg: 'bg-emerald-50', text: 'text-emerald-700' },
-                          tarjeta: { bg: 'bg-blue-50', text: 'text-blue-700' },
-                          nequi: { bg: 'bg-purple-50', text: 'text-purple-700' },
-                          daviplata: { bg: 'bg-cyan-50', text: 'text-cyan-700' },
-                          transferencia: { bg: 'bg-orange-50', text: 'text-orange-700' },
-                          credito: { bg: 'bg-rose-50', text: 'text-rose-700' },
-                        };
-                        const c = colors[method] ?? { bg: 'bg-gray-50', text: 'text-gray-700' };
+                      {paymentTiles.map((method) => {
+                        const c = PAYMENT_COLORS[method] ?? { bg: 'bg-gray-50', text: 'text-gray-700' };
                         return (
                           <div key={method} className={`${c.bg} rounded-xl p-3`}>
-                            <p className="text-xs text-gray-500 font-medium capitalize mb-1">{method}</p>
-                            <p className={`text-base font-bold ${c.text} mt-1`}>
-                              {formatCurrency(amount)}
-                            </p>
+                            <p className="text-xs text-gray-500 font-medium mb-1">{PAYMENT_LABELS[method] ?? method}</p>
+                            <p className={`text-base font-bold ${c.text} mt-1`}>{formatCurrency(overview.payments[method] ?? 0)}</p>
+                            {method === 'credito' && <p className="text-[11px] text-gray-400 mt-0.5">No entra a la caja</p>}
                           </div>
                         );
                       })}
@@ -376,7 +461,10 @@ export default function CashRegisterPage(): JSX.Element {
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                       <Receipt size={16} />
-                      Gastos de la sesión
+                      Egresos de la sesión
+                      {overview && overview.expensesCount > 0 && (
+                        <span className="text-xs font-normal text-gray-400">· {formatCurrency(overview.expensesTotal)}</span>
+                      )}
                     </h4>
                     <button
                       type="button"
@@ -384,11 +472,11 @@ export default function CashRegisterPage(): JSX.Element {
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
                     >
                       <Plus size={14} />
-                      Agregar gasto
+                      Registrar egreso
                     </button>
                   </div>
                   {expenses.length === 0 ? (
-                    <p className="text-sm text-gray-400 text-center py-4">No hay gastos registrados</p>
+                    <p className="text-sm text-gray-400 text-center py-4">No hay egresos registrados</p>
                   ) : (
                     <DataTable
                       columns={expenseColumns}
@@ -402,47 +490,72 @@ export default function CashRegisterPage(): JSX.Element {
                 {showAddExpense && (
                   <div className="border border-gray-200 rounded-xl p-4 space-y-3 bg-gray-50">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-semibold text-gray-700">Nuevo gasto</h4>
-                      <button
-                        type="button"
-                        onClick={() => { setShowAddExpense(false); setExpenseReason(''); setExpenseAmount(''); }}
-                        className="text-gray-400 hover:text-gray-600"
-                      >
+                      <h4 className="text-sm font-semibold text-gray-700">Nuevo egreso</h4>
+                      <button type="button" onClick={resetExpenseForm} className="text-gray-400 hover:text-gray-600" aria-label="Cancelar egreso">
                         <X size={16} />
                       </button>
                     </div>
-                    <input
-                      type="text"
-                      value={expenseReason}
-                      onChange={(e) => setExpenseReason(e.target.value)}
-                      placeholder="Razón del gasto"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                    <div className="relative">
-                      <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label htmlFor="expense-concept" className="block text-xs font-medium text-gray-600 mb-1">Concepto</label>
+                        <select
+                          id="expense-concept"
+                          value={expenseConcept}
+                          onChange={(e) => setExpenseConcept(e.target.value as ExpenseConcept | '')}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        >
+                          <option value="">Selecciona un concepto…</option>
+                          {EXPENSE_CONCEPTS.map((concept) => (
+                            <option key={concept} value={concept}>{concept}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor="expense-amount" className="block text-xs font-medium text-gray-600 mb-1">Monto</label>
+                        <div className="relative">
+                          <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                          <input
+                            id="expense-amount"
+                            type="number"
+                            step="1"
+                            min="0"
+                            value={expenseAmount}
+                            onChange={(e) => setExpenseAmount(e.target.value)}
+                            placeholder="0"
+                            className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <label htmlFor="expense-note" className="block text-xs font-medium text-gray-600 mb-1">
+                        Detalle {expenseConcept === 'Otro' ? <span className="text-red-500">(obligatorio)</span> : <span className="text-gray-400">(opcional)</span>}
+                      </label>
                       <input
-                        type="number"
-                        step="1"
-                        min="0"
-                        value={expenseAmount}
-                        onChange={(e) => setExpenseAmount(e.target.value)}
-                        placeholder="Monto"
-                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        id="expense-note"
+                        type="text"
+                        value={expenseNote}
+                        maxLength={200}
+                        onChange={(e) => setExpenseNote(e.target.value)}
+                        placeholder={expenseConcept === 'Otro' ? 'Describe el egreso' : 'Ej.: factura de la luz'}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                       />
                     </div>
+                    {expenseError && <p role="alert" className="text-sm font-medium text-red-600">{expenseError}</p>}
                     <LoadingButton
                       onClick={handleAddExpense}
                       loading={expenseLoading}
-                      disabled={!expenseReason.trim() || !expenseAmount}
+                      disabled={!expenseConcept || !expenseAmount || Number(expenseAmount) <= 0}
                       size="sm"
                     >
-                      Registrar gasto
+                      Registrar egreso
                     </LoadingButton>
                   </div>
                 )}
 
                 {/* Close session */}
                 <div className="border-t border-gray-200 pt-4">
+                  <p className="text-xs text-gray-500 mb-2">Cuenta el efectivo del cajón e ingrésalo para cerrar. Si no coincide con lo esperado, te pediremos confirmar.</p>
                   <div className="flex items-center gap-3 flex-wrap">
                     <div className="relative">
                       <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -452,14 +565,15 @@ export default function CashRegisterPage(): JSX.Element {
                         min="0"
                         value={finalCash}
                         onChange={(e) => setFinalCash(e.target.value)}
-                        placeholder={es.cash.finalCash}
-                        className="pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-40"
+                        placeholder="Efectivo contado"
+                        aria-label="Efectivo contado"
+                        className="pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-44"
                       />
                     </div>
                     <LoadingButton
                       onClick={handleCloseCash}
                       loading={cashLoading}
-                      disabled={!finalCash}
+                      disabled={finalCash === ''}
                       variant="danger"
                     >
                       <Lock size={16} />
@@ -497,48 +611,17 @@ export default function CashRegisterPage(): JSX.Element {
             )}
           </Card>
 
-          {/* Today's summary when session is active */}
+          {/* Day context (all of the cashier's sessions today) */}
           {session && (
-            <Card title="Resumen del día">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-                    <TrendingUp size={20} className="text-emerald-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Ventas del día</p>
-                    <p className="text-lg font-bold text-gray-900">{formatCurrency(todaySales)}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
-                    <Receipt size={20} className="text-red-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Gastos del día</p>
-                    <p className="text-lg font-bold text-gray-900">{formatCurrency(todayExpenses)}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                    <Wallet size={20} className="text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Neto esperado</p>
-                    <p className="text-lg font-bold text-gray-900">{formatCurrency(expectedCash)}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                    <PiggyBank size={20} className="text-purple-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Efectivo en caja</p>
-                    <p className="text-lg font-bold text-gray-900">{formatCurrency(expectedCash)}</p>
-                  </div>
-                </div>
+            <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-4">
+              <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                <TrendingUp size={20} className="text-gray-500" />
               </div>
-            </Card>
+              <div>
+                <p className="text-xs text-gray-500">Ventas de hoy en todas tus cajas</p>
+                <p className="text-lg font-bold text-gray-900">{formatCurrency(todaySales)}</p>
+              </div>
+            </div>
           )}
         </div>
 
@@ -554,7 +637,7 @@ export default function CashRegisterPage(): JSX.Element {
                   className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <Plus size={16} className="text-red-500" />
-                  Registrar gasto
+                  Registrar egreso
                 </button>
                 <button
                   type="button"
@@ -575,19 +658,26 @@ export default function CashRegisterPage(): JSX.Element {
             ) : (
               <div className="space-y-2">
                 {closures.slice(0, 5).map((c) => (
-                  <div key={c.id} className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg">
+                  <div key={c.id} className="flex items-center justify-between gap-2 p-2.5 bg-gray-50 rounded-lg">
                     <div>
                       <p className="text-sm font-medium text-gray-800">{c.user.fullName}</p>
                       <p className="text-xs text-gray-400">{formatDateTime(c.closedAt)}</p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-gray-900">{formatCurrency(c.finalCash ?? 0)}</p>
-                      {c.difference != null && (
-                        <p className={`text-xs font-medium ${c.difference >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {c.difference >= 0 ? '+' : ''}{formatCurrency(c.difference)}
-                        </p>
-                      )}
-                    </div>
+                    {c.autoClosed ? (
+                      <div className="text-right">
+                        <StatusBadge status="warning" variant="warning" label="Cierre automático" />
+                        <p className="text-xs text-gray-400 mt-1">Esperado {formatCurrency(c.expectedCash ?? 0)}</p>
+                      </div>
+                    ) : (
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-gray-900">{formatCurrency(c.finalCash ?? 0)}</p>
+                        {c.difference != null && (
+                          <p className={`text-xs font-medium ${c.difference === 0 ? 'text-gray-400' : c.difference > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {c.difference > 0 ? '+' : ''}{formatCurrency(c.difference)}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
                 {closures.length > 5 && (
@@ -604,6 +694,8 @@ export default function CashRegisterPage(): JSX.Element {
           </Card>
         </div>
       </div>
+
+      {closeDialog}
 
       {/* Closures History Modal */}
       {showClosures && (

@@ -1,6 +1,8 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { parseLocalDateOnly } from '../utils/date';
+import { AppError, ErrorCode } from '../utils/errors';
+import { EXPENSE_CONCEPTS, buildExpenseReason } from '../../renderer/src/shared/types/cash.types';
 import { productCreateInputSchema, productUpdateInputSchema } from './inventory-schemas';
 
 import { AuthService, AuthUser } from '../services/auth.service';
@@ -238,16 +240,55 @@ export const cashRouter = t.router({
       return cashSessionService.openCashSession(requireAccountId(ctx), ctx.user.id, input.initialCash, input.branchId);
     }),
 
+  // El esperado lo calcula el servidor; `expectedCash` se acepta solo por compatibilidad y se ignora.
   close: authenticatedProcedure
-    .input(z.object({ sessionId: z.number(), finalCash: moneyAmount, expectedCash: moneyAmount }))
+    .input(z.object({
+      sessionId: z.number(),
+      finalCash: moneyAmount,
+      expectedCash: moneyAmount.optional(),
+      reason: z.string().trim().max(300).optional(),
+    }))
     .mutation(async ({ input, ctx }) => {
-      return cashSessionService.closeCashSession(input.sessionId, input.finalCash, input.expectedCash, requireAccountId(ctx), ctx.user.id);
+      return cashSessionService.closeCashSession(
+        input.sessionId,
+        input.finalCash,
+        input.expectedCash ?? 0,
+        requireAccountId(ctx),
+        ctx.user.id,
+        input.reason || undefined,
+      );
     }),
 
+  getSessionOverview: authenticatedProcedure
+    .input(z.object({ sessionId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      return cashSessionService.getSessionOverview(input.sessionId, requireAccountId(ctx), ctx.user.role === 'CASHIER' ? ctx.user.id : undefined);
+    }),
+
+  // Egreso por concepto de lista fija (+ detalle opcional); `reason` de texto libre se mantiene por compatibilidad.
   createExpense: authenticatedProcedure
-    .input(z.object({ sessionId: z.number(), userId: z.number(), amount: moneyAmount, reason: z.string() }))
+    .input(
+      z
+        .object({
+          sessionId: z.number(),
+          userId: z.number(),
+          amount: moneyAmount,
+          concept: z.enum(EXPENSE_CONCEPTS).optional(),
+          note: z.string().trim().max(200).optional(),
+          reason: z.string().max(230).optional(),
+        })
+        .refine((v) => Boolean(v.concept) || Boolean(v.reason?.trim()), { message: 'Elige el concepto del egreso.' }),
+    )
     .mutation(async ({ input, ctx }) => {
-      return cashExpenseService.createExpense(input.sessionId, ctx.user.id, input.amount, input.reason, requireAccountId(ctx));
+      let reason = input.reason ?? '';
+      if (input.concept) {
+        try {
+          reason = buildExpenseReason(input.concept, input.note);
+        } catch (err) {
+          throw new AppError(ErrorCode.VALIDATION, err instanceof Error ? err.message : 'Concepto inválido.');
+        }
+      }
+      return cashExpenseService.createExpense(input.sessionId, ctx.user.id, input.amount, reason, requireAccountId(ctx));
     }),
 
   touchActivity: authenticatedProcedure
