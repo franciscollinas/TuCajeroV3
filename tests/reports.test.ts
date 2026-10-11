@@ -52,6 +52,9 @@ const SALES: SaleSpec[] = [
   { n: 'S5', when: at(10, 8, 12), lines: [{ product: 1, qty: 5 }], pays: [{ method: 'efectivo', amount: 5000 }], accountId: 2 },
   { n: 'S6', when: at(10, 8, 10), lines: [{ product: 1, qty: 1 }], pays: [{ method: 'efectivo', amount: 2000 }], tax: 190, change: 810 },
   { n: 'S7', when: at(10, 7, 15), lines: [{ product: 1, qty: 3 }], pays: [{ method: 'tarjeta', amount: 3000 }], branchId: 1 },
+  // Mes anterior (septiembre), fuera de la ventana de 30 días del Dashboard al 8-oct.
+  { n: 'S8', when: at(9, 2, 11), lines: [{ product: 2, qty: 2 }], pays: [{ method: 'efectivo', amount: 5000 }] },
+  { n: 'S9', when: at(9, 8, 11), lines: [{ product: 1, qty: 4 }], pays: [{ method: 'nequi', amount: 4000 }] },
 ];
 
 serviceDescribe('ReportsService', () => {
@@ -181,6 +184,73 @@ serviceDescribe('ReportsService', () => {
     expect(general.previous.revenue).toBe(1000);
     expect(general.salesByDay).toHaveLength(4);
     expect(general.inventoryValue).toBe(12000);
+    expect(general.monthComparison.month).toBe('2026-10');
+    expect(general.monthComparison.previousMonth).toBe('2026-09');
+  });
+
+  describe('comparativo mensual', () => {
+    const anchor = new Date(2026, 9, 8); // el mes se toma del último día del rango
+
+    it('mes en curso: compara hasta el mismo día y deja vacíos los días que no llegan', async () => {
+      const cmp = await reports.getMonthComparison(anchor, 1, undefined, new Date(2026, 9, 8, 12, 0));
+      expect(cmp.month).toBe('2026-10');
+      expect(cmp.previousMonth).toBe('2026-09');
+      expect(cmp.days).toHaveLength(31); // octubre tiene 31 días; septiembre, 30
+      expect(cmp.cutoffDay).toBe(8);
+      const pick = (d: number) => cmp.days[d - 1];
+      expect(pick(3)).toEqual({ day: 3, current: 1000, previous: 0 }); // S0
+      expect(pick(5)).toEqual({ day: 5, current: 5500, previous: 0 }); // S1 + S2 (8:30 p. m. sigue en el día 5)
+      expect(pick(2)).toEqual({ day: 2, current: 0, previous: 5000 }); // S8 de septiembre
+      expect(pick(8)).toEqual({ day: 8, current: 1190, previous: 4000 }); // S6 y S9
+      expect(pick(9).current).toBeNull(); // todavía no llega
+      expect(pick(31)).toEqual({ day: 31, current: null, previous: null }); // septiembre no tiene día 31
+      expect(cmp.currentToDate).toBe(15690);
+      expect(cmp.previousSameDays).toBe(9000);
+      expect(cmp.changePct).toBe(74.3);
+    });
+
+    it('mes ya cerrado: compara el mes completo', async () => {
+      const cmp = await reports.getMonthComparison(anchor, 1, undefined, new Date(2026, 10, 20));
+      expect(cmp.cutoffDay).toBe(31);
+      expect(cmp.days[30].current).toBe(0); // 31-oct sin ventas, pero el día existe
+      expect(cmp.currentToDate).toBe(15690);
+      expect(cmp.previousSameDays).toBe(9000);
+    });
+
+    it('mes futuro: nada que comparar todavía', async () => {
+      const cmp = await reports.getMonthComparison(anchor, 1, undefined, new Date(2026, 8, 20));
+      expect(cmp.cutoffDay).toBe(0);
+      expect(cmp.days.every((d) => d.current === null)).toBe(true);
+      expect(cmp.changePct).toBeNull();
+    });
+
+    it('sin ventas el mes anterior no hay porcentaje (evita dividir entre cero)', async () => {
+      const cmp = await reports.getMonthComparison(new Date(2026, 8, 15), 1, undefined, new Date(2026, 9, 8));
+      expect(cmp.month).toBe('2026-09');
+      expect(cmp.previousMonth).toBe('2026-08');
+      expect(cmp.currentToDate).toBe(9000);
+      expect(cmp.previousSameDays).toBe(0);
+      expect(cmp.changePct).toBeNull();
+    });
+
+    it('enero se compara con diciembre del año anterior', async () => {
+      const cmp = await reports.getMonthComparison(new Date(2026, 0, 10), 1, undefined, new Date(2026, 0, 10));
+      expect(cmp.month).toBe('2026-01');
+      expect(cmp.previousMonth).toBe('2025-12');
+    });
+
+    it('febrero (28 días) contra enero (31): no pierde los días extra del mes anterior', async () => {
+      const cmp = await reports.getMonthComparison(new Date(2026, 1, 10), 1, undefined, new Date(2026, 2, 5));
+      expect(cmp.days).toHaveLength(31);
+      expect(cmp.days[28]).toEqual({ day: 29, current: null, previous: 0 });
+    });
+
+    it('filtra por sucursal y por cuenta', async () => {
+      const branch = await reports.getMonthComparison(anchor, 1, 1, new Date(2026, 10, 20));
+      expect(branch.currentToDate).toBe(3000);
+      const other = await reports.getMonthComparison(anchor, 2, undefined, new Date(2026, 10, 20));
+      expect(other.currentToDate).toBe(5000); // solo S5; nada de la cuenta 1
+    });
   });
 
   it('rechaza rangos inválidos', async () => {

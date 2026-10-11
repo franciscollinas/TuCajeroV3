@@ -58,6 +58,28 @@ export interface TopProductRow {
   total: number;
 }
 
+export interface MonthDayPoint {
+  day: number;
+  /** Ingresos del día en el mes comparado; null si el día aún no llega o el mes no lo tiene. */
+  current: number | null;
+  /** Ingresos del mismo día del mes anterior; null si ese mes no tiene ese día. */
+  previous: number | null;
+}
+
+export interface MonthComparison {
+  /** AAAA-MM del mes comparado (el del último día del rango). */
+  month: string;
+  previousMonth: string;
+  /** Un punto por día de mes, 1 hasta el mayor de los dos meses. */
+  days: MonthDayPoint[];
+  /** Último día incluido en los acumulados: hoy si es el mes en curso, si no el fin de mes. */
+  cutoffDay: number;
+  currentToDate: number;
+  previousSameDays: number;
+  /** Variación % del acumulado; null si el mes anterior no tuvo ventas con qué comparar. */
+  changePct: number | null;
+}
+
 export interface GeneralReport {
   range: { startDate: string; endDate: string };
   previousRange: { startDate: string; endDate: string };
@@ -67,6 +89,7 @@ export interface GeneralReport {
   paymentMix: PaymentMixRow[];
   topProducts: TopProductRow[];
   inventoryValue: number;
+  monthComparison: MonthComparison;
 }
 
 export const PAYMENT_LABELS: Record<string, string> = {
@@ -253,17 +276,68 @@ export class ReportsService {
     return roundMoney(row?.value ?? 0);
   }
 
+  /**
+   * Ingresos por día del mes de calendario de `anchor` frente al mes anterior.
+   * Siempre compara meses completos, sin depender del rango de fechas elegido.
+   * Los acumulados llegan hasta el mismo día en ambos meses (hoy, si es el mes
+   * en curso) para que la variación sea justa.
+   */
+  async getMonthComparison(anchor: Date, accountId: number, branchId?: number, now: Date = new Date()): Promise<MonthComparison> {
+    const year = anchor.getFullYear();
+    const month = anchor.getMonth();
+    const currentRange: ReportRange = { start: new Date(year, month, 1), end: new Date(year, month + 1, 0) };
+    const previousRange: ReportRange = { start: new Date(year, month - 1, 1), end: new Date(year, month, 0) };
+
+    const [currentDays, previousDays] = await Promise.all([
+      this.getSalesByDay(currentRange, accountId, branchId),
+      this.getSalesByDay(previousRange, accountId, branchId),
+    ]);
+
+    const monthIndex = year * 12 + month;
+    const nowIndex = now.getFullYear() * 12 + now.getMonth();
+    const cutoffDay = monthIndex === nowIndex ? now.getDate() : monthIndex < nowIndex ? currentDays.length : 0;
+
+    const length = Math.max(currentDays.length, previousDays.length);
+    const days: MonthDayPoint[] = [];
+    for (let day = 1; day <= length; day++) {
+      days.push({
+        day,
+        current: day <= currentDays.length && day <= cutoffDay ? currentDays[day - 1].revenue : null,
+        previous: day <= previousDays.length ? previousDays[day - 1].revenue : null,
+      });
+    }
+
+    const currentToDate = roundMoney(days.reduce((acc, d) => acc + (d.current ?? 0), 0));
+    const previousSameDays = roundMoney(
+      days.reduce((acc, d) => acc + (d.day <= cutoffDay ? (d.previous ?? 0) : 0), 0),
+    );
+    const label = (y: number, m: number) => {
+      const d = new Date(y, m, 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    };
+    return {
+      month: label(year, month),
+      previousMonth: label(year, month - 1),
+      days,
+      cutoffDay,
+      currentToDate,
+      previousSameDays,
+      changePct: previousSameDays > 0 ? Math.round(((currentToDate - previousSameDays) / previousSameDays) * 1000) / 10 : null,
+    };
+  }
+
   /** Todo lo que necesita la pestaña General de Reportes, en una sola llamada. */
-  async getGeneralReport(range: ReportRange, accountId: number, branchId?: number): Promise<GeneralReport> {
+  async getGeneralReport(range: ReportRange, accountId: number, branchId?: number, now: Date = new Date()): Promise<GeneralReport> {
     this.validate(range);
     const previous = this.previousRange(range);
-    const [current, previousTotals, salesByDay, paymentMix, topProducts, inventoryValue] = await Promise.all([
+    const [current, previousTotals, salesByDay, paymentMix, topProducts, inventoryValue, monthComparison] = await Promise.all([
       this.getPeriodTotals(range, accountId, branchId),
       this.getPeriodTotals(previous, accountId, branchId),
       this.getSalesByDay(range, accountId, branchId),
       this.getPaymentMix(range, accountId, branchId),
       this.getTopProducts(range, accountId, 10, branchId),
       this.getInventoryValue(accountId),
+      this.getMonthComparison(range.end, accountId, branchId, now),
     ]);
     return {
       range: toDayRange(range),
@@ -274,6 +348,7 @@ export class ReportsService {
       paymentMix,
       topProducts,
       inventoryValue,
+      monthComparison,
     };
   }
 }

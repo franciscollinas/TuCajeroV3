@@ -3,14 +3,14 @@ import { useState, useEffect } from 'react';
 import {
   BarChart3, TrendingUp, DollarSign, Package,
   ShoppingCart, Download, FileSpreadsheet, AlertTriangle,
-  Calendar, Clock, ChevronRight, CreditCard,
+  Calendar, Clock, ChevronRight, CreditCard, Wallet, Percent,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LineChart, Line, Cell,
 } from 'recharts';
 import { trpc } from '../../trpc';
-import { formatCurrency, formatDate, formatDateTime, toLocalDateInput } from '../../shared/utils/formatters';
+import { formatCompactCurrency, formatCurrency, formatDate, formatDateTime, toLocalDateInput } from '../../shared/utils/formatters';
 import { es } from '../../shared/i18n';
 import { Card } from '../../shared/components/Card';
 import { StatusBadge } from '../../shared/components/StatusBadge';
@@ -88,6 +88,18 @@ export default function ReportsPage(): JSX.Element {
   const inventoryValue = general?.inventoryValue ?? 0;
   const prevSales = general?.previous.sales ?? 0;
   const prevRevenue = general?.previous.revenue ?? 0;
+  const prevAvgTicket = general?.previous.avgTicket ?? 0;
+  const profit = general?.current.profit ?? 0;
+  const prevProfit = general?.previous.profit ?? 0;
+  const marginPct = general?.current.marginPct ?? 0;
+  const monthComparison = general?.monthComparison ?? null;
+  const monthLabel = (ym: string): string => {
+    const [y, m] = ym.split('-').map(Number);
+    const text = new Date(y, m - 1, 1).toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  };
+  const monthChartData = (monthComparison?.days ?? []).map((d) => ({ day: d.day, actual: d.current, anterior: d.previous }));
+  const monthHasData = monthChartData.some((d) => (d.actual ?? 0) > 0 || (d.anterior ?? 0) > 0);
 
   const stockAlertsTotal = (stockData?.critical.length ?? 0) + (stockData?.warning.length ?? 0);
   const expiryAlertsTotal = (expiryData?.expired.length ?? 0) + (expiryData?.expiringSoon.length ?? 0);
@@ -193,9 +205,58 @@ export default function ReportsPage(): JSX.Element {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
             <MetricCard icon={ShoppingCart} label={es.reports.totalSales} value={String(totalSales)} color="blue" compareLabel={prevSales > 0 ? `vs ${prevSales} anterior` : undefined} compareValue={prevSales > 0 ? ((totalSales - prevSales) / prevSales * 100) : undefined} />
             <MetricCard icon={TrendingUp} label={es.reports.netRevenue} value={formatCurrency(netRevenue)} color="emerald" compareLabel={prevRevenue > 0 ? 'vs período anterior' : undefined} compareValue={prevRevenue > 0 ? ((netRevenue - prevRevenue) / prevRevenue * 100) : undefined} />
-            <MetricCard icon={DollarSign} label="Ticket promedio" value={formatCurrency(avgTicket)} color="indigo" />
+            <MetricCard icon={DollarSign} label="Ticket promedio" value={formatCurrency(avgTicket)} color="indigo" compareLabel={prevAvgTicket > 0 ? 'vs período anterior' : undefined} compareValue={prevAvgTicket > 0 ? ((avgTicket - prevAvgTicket) / prevAvgTicket * 100) : undefined} />
+            <MetricCard icon={Wallet} label="Ganancia estimada" value={formatCurrency(profit)} color="emerald" compareLabel={prevProfit > 0 ? 'vs período anterior' : undefined} compareValue={prevProfit > 0 ? ((profit - prevProfit) / prevProfit * 100) : undefined} />
+            <MetricCard icon={Percent} label="Margen del período" value={`${marginPct.toFixed(1)}%`} color="amber" />
             <MetricCard icon={Package} label={es.reports.inventoryValue} value={formatCurrency(inventoryValue)} color="indigo" />
           </div>
+
+          {/* Mes actual vs mes anterior: meses completos, sin depender del rango elegido */}
+          {monthComparison && (
+            <Card title="Ventas por día — mes actual vs mes anterior">
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-3 text-sm">
+                <span className="inline-flex items-center gap-2 text-gray-700">
+                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#6366f1' }} />
+                  {monthLabel(monthComparison.month)}
+                </span>
+                <span className="inline-flex items-center gap-2 text-gray-700">
+                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#cbd5e1' }} />
+                  {monthLabel(monthComparison.previousMonth)}
+                </span>
+                {monthComparison.cutoffDay > 0 && (
+                  <span className="text-gray-500">
+                    Hasta el día {monthComparison.cutoffDay}: <strong className="text-gray-800">{formatCurrency(monthComparison.currentToDate)}</strong> frente a {formatCurrency(monthComparison.previousSameDays)}
+                    {monthComparison.changePct !== null && (
+                      <span className={`ml-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${monthComparison.changePct >= 0 ? 'bg-success-50 text-success-600' : 'bg-error-50 text-error-600'}`}>
+                        {monthComparison.changePct >= 0 ? '+' : ''}{monthComparison.changePct.toFixed(1)}%
+                      </span>
+                    )}
+                    {monthComparison.changePct === null && <span className="ml-2 text-xs text-gray-400">sin ventas el mes anterior para comparar</span>}
+                  </span>
+                )}
+              </div>
+              {monthHasData ? (
+                <div className="h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={monthChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} barCategoryGap="18%">
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval={0} />
+                      <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={64} tickFormatter={(v: number) => formatCompactCurrency(v)} />
+                      <Tooltip
+                        contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                        labelFormatter={(day) => `Día ${day}`}
+                        formatter={(value, name) => [typeof value === 'number' ? formatCurrency(value) : '—', name === 'actual' ? monthLabel(monthComparison.month) : monthLabel(monthComparison.previousMonth)]}
+                      />
+                      <Bar dataKey="anterior" fill="#cbd5e1" radius={[3, 3, 0, 0]} name="anterior" />
+                      <Bar dataKey="actual" fill="#6366f1" radius={[3, 3, 0, 0]} name="actual" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <EmptyState icon={BarChart3} title={es.reports.noData} className="py-8" />
+              )}
+            </Card>
+          )}
 
           {/* Sales Chart */}
           <Card title={es.reports.salesSection}>
