@@ -42,6 +42,7 @@ export const ALLOWED_PROCEDURE_PATHS = new Set<string>([
   'purchase.orders.receiveItems', 'purchase.orders.delete', 'purchase.orders.summary',
   'purchase.suppliers.list', 'purchase.suppliers.create', 'purchase.suppliers.update', 'purchase.suppliers.delete',
   'quotes.list', 'quotes.getById', 'quotes.create', 'quotes.update', 'quotes.delete', 'quotes.convertToSale',
+  'reports.general',
   'export.inventory', 'export.sales', 'export.payroll', 'export.audit', 'export.dailyAudit', 'export.cashSessions', 'export.noRotation',
   'audit.list', 'audit.daily', 'audit.saveToday',
   'branches.list', 'branches.listAll', 'branches.create', 'branches.update', 'branches.delete',

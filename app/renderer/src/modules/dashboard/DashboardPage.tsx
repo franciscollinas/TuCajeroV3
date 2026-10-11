@@ -1,5 +1,5 @@
 import { rendererLogger } from '../../shared/utils/rendererLogger';
-import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
+import { lazy, Suspense, useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   TrendingUp, AlertTriangle, Package, ShoppingCart, Calendar,
@@ -7,7 +7,7 @@ import {
   ChevronDown, DollarSign, Award,
 } from 'lucide-react';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart as RePieChart, Pie, Cell, Legend,
   BarChart, Bar,
 } from 'recharts';
@@ -16,13 +16,16 @@ import { useAuth } from '../../shared/context/AuthContext';
 import { useAlertStore } from '../../shared/store/alert.store';
 import { useCashStore } from '../../shared/store/cash.store';
 import { useCloseCash } from '../../shared/hooks/useCloseCash';
-import { formatCurrency, formatDateTime } from '../../shared/utils/formatters';
+import { formatCompactCurrency, formatCurrency, formatDateTime } from '../../shared/utils/formatters';
 import { es } from '../../shared/i18n';
 import { Card } from '../../shared/components/Card';
 import { StatusBadge } from '../../shared/components/StatusBadge';
 import { LoadingSpinner } from '../../shared/components/LoadingSpinner';
 import { EmptyState } from '../../shared/components/EmptyState';
 import type { DashboardSummary } from '../../shared/types/sales.types';
+
+// Se descarga solo al mostrar el gráfico (recharts pesa bastante).
+const SalesTrendChart = lazy(() => import('../../shared/components/SalesTrendChart'));
 
 const PIE_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -320,19 +323,9 @@ export default function DashboardPage(): JSX.Element {
           </div>
           {activeChart && activeChart.length > 0 ? (
             <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={activeChart} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} formatter={(value: number, name: string) => {
-                    if (name === 'ingresos') return [formatCurrency(value), 'Ingresos'];
-                    return [value, 'Ventas'];
-                  }} />
-                  <Line type="monotone" dataKey="ventas" stroke="#6366f1" strokeWidth={2} dot={{ r: 3, fill: '#6366f1' }} name="ventas" />
-                  <Line type="monotone" dataKey="ingresos" stroke="#10b981" strokeWidth={2} dot={{ r: 3, fill: '#10b981' }} name="ingresos" />
-                </LineChart>
-              </ResponsiveContainer>
+              <Suspense fallback={<LoadingSpinner />}>
+                <SalesTrendChart data={activeChart} />
+              </Suspense>
             </div>
           ) : (
             <EmptyState icon={BarChart3} title={es.common.noResults} className="py-8" />
@@ -484,16 +477,16 @@ export default function DashboardPage(): JSX.Element {
         </Card>
 
         {/* Top Categories */}
-        <Card title={es.inventory.category}>
+        <Card title="Ventas por categoría (30 días)">
           {summary?.topCategories && summary.topCategories.length > 0 ? (
-            <div className="h-44">
+            <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={summary.topCategories} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }} formatter={(value: number) => [value, 'Productos']} />
-                  <Bar dataKey="value" radius={[4, 4, 0, 0]} name="Productos">
+                  <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={64} tickFormatter={(v: number) => formatCompactCurrency(v)} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }} formatter={(value: number) => [formatCurrency(value), 'Ventas']} />
+                  <Bar dataKey="value" radius={[4, 4, 0, 0]} name="Ventas">
                     {summary.topCategories.map((entry, index) => (
                       <Cell key={index} fill={entry.color ?? PIE_COLORS[index % PIE_COLORS.length]} />
                     ))}
@@ -505,25 +498,6 @@ export default function DashboardPage(): JSX.Element {
             <EmptyState icon={PieChart} title={es.common.noResults} className="py-8" />
           )}
 
-          {/* Sales by Payment Method (Bar) */}
-          {summary?.paymentMethods && summary.paymentMethods.length > 0 && (
-            <div className="mt-[15%] pt-6 border-t border-gray-100">
-              <h4 className="text-base font-semibold text-gray-700 mb-3">Ingresos por método de pago</h4>
-              <div className="h-44">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RePieChart>
-                    <Pie data={summary.paymentMethods} cx="50%" cy="50%" innerRadius={28} outerRadius={55} paddingAngle={3} dataKey="total" nameKey="label">
-                      {summary.paymentMethods.map((_, i) => (
-                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }} formatter={(value: number) => [formatCurrency(value), 'Total']} />
-                    <Legend verticalAlign="bottom" height={36} formatter={(value: string) => <span className="text-sm text-gray-600">{value}</span>} />
-                  </RePieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          )}
         </Card>
       </div>
 
