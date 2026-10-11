@@ -11,6 +11,7 @@ import { CashSessionService } from '../services/cash-session.service';
 import { CashExpenseService } from '../services/cash-expense.service';
 import { CustomerService } from '../services/customer.service';
 import { SalesService } from '../services/sales.service';
+import { ReportsService } from '../services/reports.service';
 import { UsersService } from '../services/users.service';
 import { ConfigService } from '../services/config.service';
 import { ExportService } from '../services/export.service';
@@ -37,6 +38,7 @@ const salesService = new SalesService();
 const usersService = new UsersService();
 const configService = new ConfigService();
 const exportService = new ExportService();
+const reportsService = new ReportsService();
 const auditService = new AuditService();
 const branchService = new BranchService();
 const labelService = new LabelService();
@@ -649,6 +651,21 @@ export const exportRouter = t.router({
     }),
 });
 
+const reportDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida (AAAA-MM-DD).');
+
+// Agregados de Reportes calculados en la base de datos (una sola llamada).
+export const reportsRouter = t.router({
+  general: adminOrSupervisor
+    .input(z.object({ startDate: reportDate, endDate: reportDate, branchId: z.number().optional() }))
+    .query(async ({ input, ctx }) => {
+      return reportsService.getGeneralReport(
+        { start: parseLocalDateOnly(input.startDate), end: parseLocalDateOnly(input.endDate) },
+        requireAccountId(ctx),
+        input.branchId,
+      );
+    }),
+});
+
 export const auditRouter = t.router({
   list: adminOrSupervisor
     .input(z.object({ limit: z.number().optional(), startDate: z.string().optional(), endDate: z.string().optional(), userId: z.number().optional(), action: z.string().optional(), entity: z.string().optional() }).optional())
@@ -781,6 +798,7 @@ export const appRouter = t.router({
   purchase: purchaseRouter,
   quotes: quoteRouter,
   export: exportRouter,
+  reports: reportsRouter,
   audit: auditRouter,
   branches: branchRouter,
   labels: labelRouter,

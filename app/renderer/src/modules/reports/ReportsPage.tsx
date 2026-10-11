@@ -1,24 +1,28 @@
 import { rendererLogger } from '../../shared/utils/rendererLogger';
-import { useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import {
   BarChart3, TrendingUp, DollarSign, Package,
   ShoppingCart, Download, FileSpreadsheet, AlertTriangle,
-  Calendar, Clock, ChevronRight, CreditCard,
+  Calendar, Clock, ChevronRight, CreditCard, Wallet, Percent,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LineChart, Line, Cell,
 } from 'recharts';
 import { trpc } from '../../trpc';
-import { formatCurrency, formatDate, formatDateTime, toLocalDateInput } from '../../shared/utils/formatters';
+import { formatCompactCurrency, formatCurrency, formatDate, formatDateTime, toLocalDateInput } from '../../shared/utils/formatters';
+import { auditActionLabel, auditDetailPairs } from '../../shared/utils/auditFormat';
 import { es } from '../../shared/i18n';
 import { Card } from '../../shared/components/Card';
 import { StatusBadge } from '../../shared/components/StatusBadge';
 import { LoadingSpinner } from '../../shared/components/LoadingSpinner';
 import { EmptyState } from '../../shared/components/EmptyState';
-import type { SaleRecord } from '../../shared/types/sales.types';
+import type { GeneralReport } from '../../../../main/services/reports.service';
 import type { StockAlerts, ExpiryAlerts, NoRotationProduct } from '../../shared/types/inventory.types';
 import type { CashClosureRow } from '../../shared/types/cash.types';
+
+// El gráfico de ventas se descarga solo cuando se muestra (recharts pesa bastante).
+const SalesTrendChart = lazy(() => import('../../shared/components/SalesTrendChart'));
 
 type ReportTab = 'general' | 'ventas' | 'inventario' | 'caja' | 'auditoria';
 
@@ -45,11 +49,8 @@ export default function ReportsPage(): JSX.Element {
   const [expiryData, setExpiryData] = useState<ExpiryAlerts | null>(null);
   const [closures, setClosures] = useState<CashClosureRow[]>([]);
   const [auditRecords, setAuditRecords] = useState<AuditEntry[]>([]);
-  const [inventoryValue, setInventoryValue] = useState(0);
   const [noRotation, setNoRotation] = useState<NoRotationProduct[]>([]);
-  const [prevRevenue, setPrevRevenue] = useState(0);
-  const [prevSales, setPrevSales] = useState(0);
-  const [periodSales, setPeriodSales] = useState<SaleRecord[]>([]);
+  const [general, setGeneral] = useState<GeneralReport | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,49 +58,23 @@ export default function ReportsPage(): JSX.Element {
       setLoading(true);
       setReportError(null);
       try {
-        const start = new Date(`${startDate}T12:00:00`);
-        const end = new Date(`${endDate}T12:00:00`);
-        const periodDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1);
-        const previousStartDate = new Date(start);
-        previousStartDate.setDate(previousStartDate.getDate() - periodDays);
-        const previousEndDate = new Date(start);
-        previousEndDate.setDate(previousEndDate.getDate() - 1);
-        const previousSalesPromise = trpc.sales.getByDateRange.query({
-          startDate: toLocalDateInput(previousStartDate),
-          endDate: toLocalDateInput(previousEndDate),
-        });
-        const [stockAlerts, expiryAlerts, closuresData, inventoryData, auditData, noRotationData, currentSalesData] = await Promise.all([
+        // Los totales, gráficos y comparación con el periodo anterior se calculan
+        // en el servidor: no se descargan ventas ni inventario completos.
+        const [stockAlerts, expiryAlerts, closuresData, auditData, noRotationData, generalData] = await Promise.all([
           trpc.inventory.getStockAlerts.query(),
           trpc.inventory.getExpiryAlerts.query(),
           trpc.cash.listClosures.query(),
-          trpc.inventory.getAll.query({}),
           trpc.audit.list.query({ limit: 20, startDate, endDate }),
           trpc.inventory.getNoRotation.query(),
-          trpc.sales.getByDateRange.query({ startDate, endDate }),
+          trpc.reports.general.query({ startDate, endDate }),
         ]);
         if (cancelled) return;
         setStockData(stockAlerts as StockAlerts | null);
         setExpiryData(expiryAlerts as ExpiryAlerts | null);
         setClosures(closuresData as CashClosureRow[]);
         setAuditRecords(auditData as AuditEntry[]);
-        if (inventoryData) {
-          const data = inventoryData as { products: Array<{ stock: number; cost: number }> };
-          const totalValue = data.products?.reduce((sum, p) => sum + (p.stock * p.cost), 0) ?? 0;
-          setInventoryValue(totalValue);
-        }
         setNoRotation(noRotationData as NoRotationProduct[]);
-        setPeriodSales((currentSalesData as SaleRecord[]).filter((sale) => sale.status === 'COMPLETED'));
-
-        try {
-          const prevSalesData = await previousSalesPromise;
-          const prevSalesArr = (prevSalesData as SaleRecord[]).filter((sale) => sale.status === 'COMPLETED');
-          const totalPrevRevenue = prevSalesArr.reduce((s, x) => s + Number(x.total ?? 0), 0);
-          const totalPrevCount = prevSalesArr.length;
-          setPrevRevenue(totalPrevRevenue);
-          setPrevSales(totalPrevCount);
-        } catch (prevErr) {
-          rendererLogger.error('ReportsPage', 'Error loading previous period:', prevErr);
-        }
+        setGeneral(generalData);
       } catch (err) {
         rendererLogger.error('ReportsPage', 'Error loading report data:', err);
         if (!cancelled) setReportError(err instanceof Error ? err.message : 'No se pudo cargar el reporte.');
@@ -111,39 +86,33 @@ export default function ReportsPage(): JSX.Element {
     return () => { cancelled = true; };
   }, [startDate, endDate]);
 
-  const totalSales = periodSales.length;
-  const netRevenue = periodSales.reduce((sum, sale) => sum + Number(sale.total), 0);
-  const avgTicket = totalSales > 0 ? netRevenue / totalSales : 0;
+  const totalSales = general?.current.sales ?? 0;
+  const netRevenue = general?.current.revenue ?? 0;
+  const avgTicket = general?.current.avgTicket ?? 0;
+  const inventoryValue = general?.inventoryValue ?? 0;
+  const prevSales = general?.previous.sales ?? 0;
+  const prevRevenue = general?.previous.revenue ?? 0;
+  const prevAvgTicket = general?.previous.avgTicket ?? 0;
+  const profit = general?.current.profit ?? 0;
+  const prevProfit = general?.previous.profit ?? 0;
+  const marginPct = general?.current.marginPct ?? 0;
+  const monthComparison = general?.monthComparison ?? null;
+  const monthLabel = (ym: string): string => {
+    const [y, m] = ym.split('-').map(Number);
+    const text = new Date(y, m - 1, 1).toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  };
+  const monthChartData = (monthComparison?.days ?? []).map((d) => ({ day: d.day, actual: d.current, anterior: d.previous }));
+  const monthHasData = monthChartData.some((d) => (d.actual ?? 0) > 0 || (d.anterior ?? 0) > 0);
 
   const stockAlertsTotal = (stockData?.critical.length ?? 0) + (stockData?.warning.length ?? 0);
   const expiryAlertsTotal = (expiryData?.expired.length ?? 0) + (expiryData?.expiringSoon.length ?? 0);
 
-  // El gráfico también se deriva del período elegido, no del resumen mensual.
-  const salesData = Array.from(periodSales.reduce((byDay, sale) => {
-    const day = sale.createdAt.slice(0, 10);
-    const entry = byDay.get(day) ?? { name: day, ventas: 0, ingresos: 0 };
-    entry.ventas += 1;
-    entry.ingresos += Number(sale.total);
-    byDay.set(day, entry);
-    return byDay;
-  }, new Map<string, { name: string; ventas: number; ingresos: number }>()).values());
-  const totalSalesInPeriod = salesData.reduce((sum, d) => sum + d.ventas, 0);
-  const totalRevenueInPeriod = salesData.reduce((sum, d) => sum + d.ingresos, 0);
-  const paymentMethods = Array.from(periodSales.reduce((methods, sale) => {
-    for (const payment of sale.payments) {
-      methods.set(payment.method, (methods.get(payment.method) ?? 0) + Number(payment.amount));
-    }
-    return methods;
-  }, new Map<string, number>()).entries()).map(([method, total]) => ({ method, label: method, total }));
-  const topProducts = Array.from(periodSales.reduce((products, sale) => {
-    for (const item of sale.items) {
-      const current = products.get(item.productId) ?? { id: item.productId, name: item.product?.name ?? `Producto #${item.productId}`, quantity: 0, total: 0 };
-      current.quantity += Number(item.quantity);
-      current.total += Number(item.total);
-      products.set(item.productId, current);
-    }
-    return products;
-  }, new Map<number, { id: number; name: string; quantity: number; total: number }>()).values()).sort((a, b) => b.total - a.total).slice(0, 10);
+  const salesData = (general?.salesByDay ?? []).map((d) => ({ name: d.date, ventas: d.sales, ingresos: d.revenue }));
+  const totalSalesInPeriod = totalSales;
+  const totalRevenueInPeriod = netRevenue;
+  const paymentMethods = (general?.paymentMix ?? []).map((p) => ({ method: p.method, label: p.label, total: p.total }));
+  const topProducts = (general?.topProducts ?? []).map((p) => ({ id: p.id, name: p.name, quantity: p.quantity, total: p.total }));
 
   const handleExport = async (format: 'csv' | 'xlsx') => {
     setExporting(format);
@@ -240,27 +209,66 @@ export default function ReportsPage(): JSX.Element {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
             <MetricCard icon={ShoppingCart} label={es.reports.totalSales} value={String(totalSales)} color="blue" compareLabel={prevSales > 0 ? `vs ${prevSales} anterior` : undefined} compareValue={prevSales > 0 ? ((totalSales - prevSales) / prevSales * 100) : undefined} />
             <MetricCard icon={TrendingUp} label={es.reports.netRevenue} value={formatCurrency(netRevenue)} color="emerald" compareLabel={prevRevenue > 0 ? 'vs período anterior' : undefined} compareValue={prevRevenue > 0 ? ((netRevenue - prevRevenue) / prevRevenue * 100) : undefined} />
-            <MetricCard icon={DollarSign} label="Ticket promedio" value={formatCurrency(avgTicket)} color="indigo" />
+            <MetricCard icon={DollarSign} label="Ticket promedio" value={formatCurrency(avgTicket)} color="indigo" compareLabel={prevAvgTicket > 0 ? 'vs período anterior' : undefined} compareValue={prevAvgTicket > 0 ? ((avgTicket - prevAvgTicket) / prevAvgTicket * 100) : undefined} />
+            <MetricCard icon={Wallet} label="Ganancia estimada" value={formatCurrency(profit)} color="emerald" compareLabel={prevProfit > 0 ? 'vs período anterior' : undefined} compareValue={prevProfit > 0 ? ((profit - prevProfit) / prevProfit * 100) : undefined} />
+            <MetricCard icon={Percent} label="Margen del período" value={`${marginPct.toFixed(1)}%`} color="amber" />
             <MetricCard icon={Package} label={es.reports.inventoryValue} value={formatCurrency(inventoryValue)} color="indigo" />
           </div>
+
+          {/* Mes actual vs mes anterior: meses completos, sin depender del rango elegido */}
+          {monthComparison && (
+            <Card title="Ventas por día — mes actual vs mes anterior">
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-3 text-sm">
+                <span className="inline-flex items-center gap-2 text-gray-700">
+                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#6366f1' }} />
+                  {monthLabel(monthComparison.month)}
+                </span>
+                <span className="inline-flex items-center gap-2 text-gray-700">
+                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#cbd5e1' }} />
+                  {monthLabel(monthComparison.previousMonth)}
+                </span>
+                {monthComparison.cutoffDay > 0 && (
+                  <span className="text-gray-500">
+                    Hasta el día {monthComparison.cutoffDay}: <strong className="text-gray-800">{formatCurrency(monthComparison.currentToDate)}</strong> frente a {formatCurrency(monthComparison.previousSameDays)}
+                    {monthComparison.changePct !== null && (
+                      <span className={`ml-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${monthComparison.changePct >= 0 ? 'bg-success-50 text-success-600' : 'bg-error-50 text-error-600'}`}>
+                        {monthComparison.changePct >= 0 ? '+' : ''}{monthComparison.changePct.toFixed(1)}%
+                      </span>
+                    )}
+                    {monthComparison.changePct === null && <span className="ml-2 text-xs text-gray-400">sin ventas el mes anterior para comparar</span>}
+                  </span>
+                )}
+              </div>
+              {monthHasData ? (
+                <div className="h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={monthChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} barCategoryGap="18%">
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval={0} />
+                      <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={64} tickFormatter={(v: number) => formatCompactCurrency(v)} />
+                      <Tooltip
+                        contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                        labelFormatter={(day) => `Día ${day}`}
+                        formatter={(value, name) => [typeof value === 'number' ? formatCurrency(value) : '—', name === 'actual' ? monthLabel(monthComparison.month) : monthLabel(monthComparison.previousMonth)]}
+                      />
+                      <Bar dataKey="anterior" fill="#cbd5e1" radius={[3, 3, 0, 0]} name="anterior" />
+                      <Bar dataKey="actual" fill="#6366f1" radius={[3, 3, 0, 0]} name="actual" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <EmptyState icon={BarChart3} title={es.reports.noData} className="py-8" />
+              )}
+            </Card>
+          )}
 
           {/* Sales Chart */}
           <Card title={es.reports.salesSection}>
             {salesData.length > 0 ? (
               <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={salesData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                    <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} formatter={(value: number, name: string) => {
-                      if (name === 'ingresos') return [formatCurrency(value), 'Ingresos'];
-                      return [value, 'Ventas'];
-                    }} />
-                    <Bar dataKey="ventas" fill="#6366f1" radius={[4, 4, 0, 0]} name="ventas" />
-                    <Bar dataKey="ingresos" fill="#10b981" radius={[4, 4, 0, 0]} name="ingresos" />
-                  </BarChart>
-                </ResponsiveContainer>
+                <Suspense fallback={<LoadingSpinner />}>
+                  <SalesTrendChart data={salesData} />
+                </Suspense>
               </div>
             ) : (
               <EmptyState icon={BarChart3} title={es.reports.noData} className="py-8" />
@@ -275,7 +283,7 @@ export default function ReportsPage(): JSX.Element {
                   <BarChart data={paymentMethods} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={64} tickFormatter={(v: number) => formatCompactCurrency(v)} />
                     <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }} formatter={(value: number) => [formatCurrency(value), 'Total']} />
                     <Bar dataKey="total" radius={[4, 4, 0, 0]} name="total">
                     {paymentMethods.map((entry, index) => (
@@ -344,8 +352,8 @@ export default function ReportsPage(): JSX.Element {
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={salesData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} minTickGap={12} />
+                    <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={64} tickFormatter={(v: number) => formatCompactCurrency(v)} />
                     <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }} formatter={(value: number) => [formatCurrency(value), 'Ingresos']} />
                     <Line type="monotone" dataKey="ingresos" stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} />
                   </LineChart>
@@ -530,7 +538,12 @@ export default function ReportsPage(): JSX.Element {
                         <td className={`px-4 py-3 text-sm font-semibold border-b border-gray-100 text-right whitespace-nowrap ${diff !== null && diff !== 0 ? (diff > 0 ? 'text-green-600' : 'text-red-600') : 'text-gray-400'}`}>
                           {diff !== null ? `${diff > 0 ? '+' : ''}${formatCurrency(diff)}` : '—'}
                         </td>
-                        <td className="px-4 py-3 border-b border-gray-100"><StatusBadge status={c.status} /></td>
+                        <td className="px-4 py-3 border-b border-gray-100">
+                          <StatusBadge status={c.status} />
+                          {c.status !== 'OPEN' && c.finalCash === null && (
+                            <span className="ml-2 text-xs font-medium text-amber-600" title="Se cerró sola por inactividad, sin conteo de efectivo">Cierre automático</span>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
@@ -563,9 +576,15 @@ export default function ReportsPage(): JSX.Element {
                     <tr key={r.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm text-gray-700 border-b border-gray-100 whitespace-nowrap">{formatDateTime(r.date)}</td>
                       <td className="px-4 py-3 text-sm text-gray-700 border-b border-gray-100">{r.user}</td>
-                      <td className="px-4 py-3 border-b border-gray-100"><StatusBadge status={r.action} /></td>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-800 border-b border-gray-100">{auditActionLabel(r.action)}</td>
                       <td className="px-4 py-3 text-sm text-gray-700 border-b border-gray-100">{r.entity}</td>
-                      <td className="px-4 py-3 text-sm text-gray-500 border-b border-gray-100 max-w-xs truncate">{r.details}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 border-b border-gray-100">
+                        {auditDetailPairs(r.details).map((p) => (
+                          <span key={p.label} className="mr-3 inline-block whitespace-nowrap">
+                            <span className="text-gray-400">{p.label}:</span> {p.value}
+                          </span>
+                        ))}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

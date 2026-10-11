@@ -1,9 +1,10 @@
-﻿import { eq, and, gte, lt, lte, desc, sum, count, countDistinct, inArray, like, sql } from 'drizzle-orm';
+﻿import { eq, and, gte, lt, lte, desc, sum, count, inArray, like, sql } from 'drizzle-orm';
 
 import { getDatabase, schema } from '../db';
 import { AppError, ErrorCode } from '../utils/errors';
 import { nowISO } from '../utils/date';
 import { AuditService } from './audit.service';
+import { ReportsService } from './reports.service';
 import { ConfigService } from './config.service';
 import type {
   SaleRecord,
@@ -16,6 +17,7 @@ import type {
 import { lineAmount, percentOf, roundMoney } from '../utils/money';
 
 const auditService = new AuditService();
+const reportsService = new ReportsService();
 
 function mapPaymentMethod(method: string): PaymentMethod {
   const allowed: PaymentMethod[] = [
@@ -822,7 +824,6 @@ export class SalesService {
     const todayEnd = new Date(year, month, day, 23, 59, 59, 999).toISOString();
     const sevenDaysAgo = new Date(year, month, day - 6).toISOString();
     const thirtyDaysAgo = new Date(year, month, day - 29).toISOString();
-    const monthStart = new Date(year, month, 1).toISOString();
 
     const branchFilter = branchId ? eq(schema.sales.branchId, branchId) : undefined;
     const accountFilter = eq(schema.sales.accountId, accountId);
@@ -844,24 +845,12 @@ export class SalesService {
         ),
       );
 
-    // Month-to-date
-    const [monthAgg] = await db
-      .select({
-        count: countDistinct(schema.sales.id).mapWith(Number),
-        total: sum(schema.sales.total).mapWith(Number),
-        cost: sum(sql`${schema.saleItems.quantity} * ${schema.products.cost}`).mapWith(Number),
-      })
-      .from(schema.sales)
-      .innerJoin(schema.saleItems, eq(schema.saleItems.saleId, schema.sales.id))
-      .innerJoin(schema.products, eq(schema.saleItems.productId, schema.products.id))
-      .where(
-        and(
-          gte(schema.sales.createdAt, monthStart),
-          eq(schema.sales.status, 'COMPLETED'),
-          accountFilter,
-          ...(branchFilter ? [branchFilter] : []),
-        ),
-      );
+    // Mes en curso: mismas cifras que Reportes (ingresos sin multiplicar por ítems).
+    const monthTotals = await reportsService.getPeriodTotals(
+      { start: new Date(year, month, 1), end: new Date(year, month, day) },
+      accountId,
+      branchId,
+    );
 
     // Recent sales
     const recentSales = await db
@@ -951,76 +940,11 @@ export class SalesService {
     }));
 
     // Top products (30 days)
-    const topProducts = await db
+    const topProductsFull = await db
       .select({
-        productId: schema.saleItems.productId,
-        quantity: sum(schema.saleItems.quantity).mapWith(Number),
-        total: sum(schema.saleItems.total).mapWith(Number),
-      })
-      .from(schema.saleItems)
-      .innerJoin(schema.sales, eq(schema.sales.id, schema.saleItems.saleId))
-      .where(
-        and(
-          gte(schema.sales.createdAt, thirtyDaysAgo),
-          eq(schema.sales.status, 'COMPLETED'),
-          accountFilter,
-          ...(branchFilter ? [branchFilter] : []),
-        ),
-      )
-      .groupBy(schema.saleItems.productId)
-      .orderBy(desc(sum(schema.saleItems.quantity)))
-      .limit(10);
-
-    const topProductsFull = await Promise.all(
-      topProducts.map(async (tp) => {
-        const [p] = await db
-          .select({ name: schema.products.name, code: schema.products.code })
-          .from(schema.products)
-          .where(eq(schema.products.id, tp.productId))
-          .limit(1);
-        return {
-          id: tp.productId,
-          name: p?.name ?? 'Unknown',
-          code: p?.code ?? '',
-          quantity: tp.quantity,
-          total: tp.total,
-        };
-      }),
-    );
-
-    // Payment methods distribution (30 days)
-    const paymentRows = await db
-      .select({
-        method: schema.payments.method,
-        total: sum(schema.payments.amount).mapWith(Number),
-      })
-      .from(schema.payments)
-      .innerJoin(schema.sales, eq(schema.sales.id, schema.payments.saleId!))
-      .where(
-        and(
-          gte(schema.sales.createdAt, thirtyDaysAgo),
-          eq(schema.sales.status, 'COMPLETED'),
-          accountFilter,
-          ...(branchFilter ? [branchFilter] : []),
-        ),
-      )
-      .groupBy(schema.payments.method)
-      .orderBy(desc(sum(schema.payments.amount)));
-
-    const payLabels: Record<string, string> = {
-      efectivo: 'Efectivo', nequi: 'Nequi', daviplata: 'Daviplata',
-      tarjeta: 'Tarjeta', transferencia: 'Transferencia', credito: 'Crédito',
-    };
-    const paymentMethods = paymentRows.map((r) => ({
-      method: r.method,
-      label: payLabels[r.method] ?? r.method,
-      total: r.total,
-    }));
-
-    // Top categories (30 days)
-    const topCategoriesRaw = await db
-      .select({
-        categoryId: schema.products.categoryId,
+        id: schema.saleItems.productId,
+        name: schema.products.name,
+        code: schema.products.code,
         quantity: sum(schema.saleItems.quantity).mapWith(Number),
         total: sum(schema.saleItems.total).mapWith(Number),
       })
@@ -1035,23 +959,40 @@ export class SalesService {
           ...(branchFilter ? [branchFilter] : []),
         ),
       )
+      .groupBy(schema.saleItems.productId)
+      .orderBy(desc(sum(schema.saleItems.quantity)))
+      .limit(10);
+
+    // Payment methods distribution (30 days), neto del cambio entregado.
+    const paymentMethods = await reportsService.getPaymentMix(
+      { start: new Date(year, month, day - 29), end: new Date(year, month, day) },
+      accountId,
+      branchId,
+    );
+
+    // Top categories (30 days)
+    const topCategoriesRaw = await db
+      .select({
+        name: schema.categories.name,
+        total: sum(schema.saleItems.total).mapWith(Number),
+      })
+      .from(schema.saleItems)
+      .innerJoin(schema.sales, eq(schema.sales.id, schema.saleItems.saleId))
+      .innerJoin(schema.products, eq(schema.products.id, schema.saleItems.productId))
+      .leftJoin(schema.categories, eq(schema.categories.id, schema.products.categoryId))
+      .where(
+        and(
+          gte(schema.sales.createdAt, thirtyDaysAgo),
+          eq(schema.sales.status, 'COMPLETED'),
+          accountFilter,
+          ...(branchFilter ? [branchFilter] : []),
+        ),
+      )
       .groupBy(schema.products.categoryId)
       .orderBy(desc(sum(schema.saleItems.quantity)))
       .limit(10);
 
-    const topCategories = await Promise.all(
-      topCategoriesRaw.map(async (tc) => {
-        const [c] = await db
-          .select({ name: schema.categories.name })
-          .from(schema.categories)
-          .where(eq(schema.categories.id, tc.categoryId!))
-          .limit(1);
-        return {
-          name: c?.name ?? 'Sin categoría',
-          value: tc.total,
-        };
-      }),
-    );
+    const topCategories = topCategoriesRaw.map((c) => ({ name: c.name ?? 'Sin categoría', value: c.total }));
 
     return {
       today: {
@@ -1059,9 +1000,9 @@ export class SalesService {
         totalMonto: todayAgg?.total ?? 0,
       },
       monthToDate: {
-        totalVentas: monthAgg?.count ?? 0,
-        totalIngresos: monthAgg?.total ?? 0,
-        totalProfit: (monthAgg?.total ?? 0) - (monthAgg?.cost ?? 0),
+        totalVentas: monthTotals.sales,
+        totalIngresos: monthTotals.revenue,
+        totalProfit: monthTotals.profit,
       },
       topProducts: topProductsFull,
       paymentMethods,
