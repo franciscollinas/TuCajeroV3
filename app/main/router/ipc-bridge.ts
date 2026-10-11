@@ -31,7 +31,7 @@ export const ALLOWED_PROCEDURE_PATHS = new Set<string>([
   'inventory.create', 'inventory.update', 'inventory.delete', 'inventory.adjustStock',
   'inventory.getStockAlerts', 'inventory.getExpiryAlerts', 'inventory.getNoRotation', 'inventory.bulkImport',
   'cash.getActive', 'cash.getTodaySalesTotal', 'cash.getTodayExpenses', 'cash.listExpenses',
-  'cash.listClosures', 'cash.getTodayPaymentsByMethod', 'cash.open', 'cash.close', 'cash.createExpense', 'cash.touchActivity',
+  'cash.listClosures', 'cash.getTodayPaymentsByMethod', 'cash.open', 'cash.close', 'cash.getSessionOverview', 'cash.createExpense', 'cash.touchActivity',
   'customers.search', 'customers.create', 'customers.update', 'customers.getHistory',
   'customers.getDebts', 'customers.payDebt',
   'sales.create', 'sales.getById', 'sales.getByNumber', 'sales.getByCashRegister',

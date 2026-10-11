@@ -79,9 +79,7 @@ export const useCashStore = create<CashState>((set, get) => ({
   },
 
   closeCash: async (id, finalCash, _userId) => {
-    const currentSession = get().session;
-    const expectedCash = currentSession ? (currentSession.expectedCash ?? currentSession.initialCash) : finalCash;
-    await trpc.cash.close.mutate({ sessionId: id, finalCash, expectedCash });
+    await trpc.cash.close.mutate({ sessionId: id, finalCash });
     get().clearSession();
   },
 

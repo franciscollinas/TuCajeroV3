@@ -15,6 +15,7 @@ import { trpc } from '../../trpc';
 import { useAuth } from '../../shared/context/AuthContext';
 import { useAlertStore } from '../../shared/store/alert.store';
 import { useCashStore } from '../../shared/store/cash.store';
+import { useCloseCash } from '../../shared/hooks/useCloseCash';
 import { formatCurrency, formatDateTime } from '../../shared/utils/formatters';
 import { es } from '../../shared/i18n';
 import { Card } from '../../shared/components/Card';
@@ -97,22 +98,28 @@ export default function DashboardPage(): JSX.Element {
     }
   }, [initialCash, user, currentBranch, fetchTodayTotals]);
 
+  // Mismo flujo de cierre que la página de Caja: pide confirmación si hay diferencia.
+  const handleClosed = useCallback((): void => {
+    useCashStore.getState().clearSession();
+    setFinalCash('');
+    setShowCloseInput(false);
+  }, []);
+  const { requestClose, closeDialog } = useCloseCash(handleClosed);
+
   const handleCloseCash = useCallback(async () => {
     if (!activeCash) return;
     if (!user) return;
     const amount = Number(finalCash);
-    if (!amount || amount < 0) return;
+    if (finalCash === '' || !Number.isFinite(amount) || amount < 0) return;
     setCashLoading(true);
     try {
-      await useCashStore.getState().closeCash(activeCash.id, amount, user.id);
-      setFinalCash('');
-      setShowCloseInput(false);
+      await requestClose(activeCash.id, amount);
     } catch (err) {
       rendererLogger.error('DashboardPage', 'Error closing cash:', err);
     } finally {
       setCashLoading(false);
     }
-  }, [activeCash, finalCash, user]);
+  }, [activeCash, finalCash, user, requestClose]);
 
   const toggleSaleExpand = useCallback((id: number): void => {
     setExpandedSales((prev) => {
@@ -149,6 +156,7 @@ export default function DashboardPage(): JSX.Element {
 
   return (
     <div className="space-y-6">
+      {closeDialog}
       {/* ── Welcome Header ── */}
       <div className="relative overflow-hidden rounded-2xl p-6 text-white" style={{ background: 'linear-gradient(135deg, #3641f5, #2a31d8, #1e24b5)' }}>
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-32 translate-x-32 pointer-events-none" />
