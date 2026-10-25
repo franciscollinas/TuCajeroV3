@@ -13,6 +13,7 @@ import { LoadingButton } from '../../shared/components/LoadingButton';
 import { DataTable } from '../../shared/components/DataTable';
 import type { Column } from '../../shared/components/DataTable';
 import { StatusBadge } from '../../shared/components/StatusBadge';
+import { LoadError } from '../../shared/components/LoadError';
 import { useCloseCash } from '../../shared/hooks/useCloseCash';
 import { EXPENSE_CONCEPTS, parseExpenseReason } from '../../shared/types/cash.types';
 import type {
@@ -43,6 +44,8 @@ export default function CashRegisterPage(): JSX.Element {
   const [session, setSession] = useState<CashRegister | null>(null);
   const [overview, setOverview] = useState<CashSessionOverview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [cashLoading, setCashLoading] = useState(false);
 
   const [initialCash, setInitialCash] = useState('');
@@ -103,6 +106,7 @@ export default function CashRegisterPage(): JSX.Element {
     const fetchData = async () => {
       try {
         if (!user) return;
+        setLoadError(null);
         const activeSession = await trpc.cash.getActive.query({ userId: user.id, branchId }) as CashRegister | null;
         if (cancelled) return;
         setSession(activeSession);
@@ -124,13 +128,14 @@ export default function CashRegisterPage(): JSX.Element {
         }
       } catch (err) {
         rendererLogger.error('CashRegisterPage', 'Error fetching cash data:', err);
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Error desconocido.');
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
     fetchData();
     return () => { cancelled = true; };
-  }, [user, branchId, loadSessionData]);
+  }, [user, branchId, loadSessionData, reloadKey]);
 
   // Session timer
   useEffect(() => {
@@ -324,6 +329,10 @@ export default function CashRegisterPage(): JSX.Element {
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
       </div>
     );
+  }
+
+  if (loadError) {
+    return <LoadError what="la caja" detail={loadError} onRetry={() => { setLoading(true); setReloadKey((k) => k + 1); }} />;
   }
 
   return (

@@ -17,6 +17,7 @@ import { Card } from '../../shared/components/Card';
 import { StatusBadge } from '../../shared/components/StatusBadge';
 import { LoadingSpinner } from '../../shared/components/LoadingSpinner';
 import { EmptyState } from '../../shared/components/EmptyState';
+import { LoadError } from '../../shared/components/LoadError';
 import type { GeneralReport } from '../../../../main/services/reports.service';
 import type { StockAlerts, ExpiryAlerts, NoRotationProduct } from '../../shared/types/inventory.types';
 import type { CashClosureRow } from '../../shared/types/cash.types';
@@ -42,6 +43,7 @@ export default function ReportsPage(): JSX.Element {
   const [endDate, setEndDate] = useState(toLocalDateInput(today));
   const [loading, setLoading] = useState(true);
   const [reportError, setReportError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [exporting, setExporting] = useState<'csv' | 'xlsx' | null>(null);
   const [activeTab, setActiveTab] = useState<ReportTab>('general');
 
@@ -54,6 +56,11 @@ export default function ReportsPage(): JSX.Element {
 
   useEffect(() => {
     let cancelled = false;
+    // Con una fecha vacía no hay rango que consultar: se espera a que se elijan ambas.
+    if (!startDate || !endDate) {
+      setLoading(false);
+      return;
+    }
     const fetchData = async () => {
       setLoading(true);
       setReportError(null);
@@ -84,7 +91,7 @@ export default function ReportsPage(): JSX.Element {
     };
     fetchData();
     return () => { cancelled = true; };
-  }, [startDate, endDate]);
+  }, [startDate, endDate, reloadKey]);
 
   const totalSales = general?.current.sales ?? 0;
   const netRevenue = general?.current.revenue ?? 0;
@@ -147,7 +154,7 @@ export default function ReportsPage(): JSX.Element {
   }
 
   if (reportError) {
-    return <EmptyState icon={AlertTriangle} title="No se pudo cargar el reporte" description={reportError} className="py-16" />;
+    return <LoadError what="el reporte" detail={reportError} onRetry={() => setReloadKey((k) => k + 1)} />;
   }
 
   return (
