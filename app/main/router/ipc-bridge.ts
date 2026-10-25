@@ -4,7 +4,7 @@ import { AuthService, AuthUser } from '../services/auth.service';
 import { logger } from '../utils/logger';
 import { toApiError } from '../utils/errors';
 import { getAppDataDir } from '../utils/paths';
-import { downloadUpdate, installUpdate } from '../updater';
+import { checkForUpdatesNow, downloadUpdate, installUpdate } from '../updater';
 import { extname, resolve, sep } from 'path';
 
 const ALLOWED_OPEN_DIRS = ['exports', 'invoices', 'build', 'release'];
@@ -142,6 +142,10 @@ export function registerIpc(): void {
     installUpdate();
     return { success: true };
   });
+
+  // Botón «Buscar actualizaciones» del Dashboard. Si hay una versión nueva, se descarga sola y el aviso
+  // de abajo a la derecha muestra el avance (los eventos de siempre).
+  ipcMain.handle('update:check', () => checkForUpdatesNow());
 
   ipcMain.handle('app:version', () => app.getVersion());
 

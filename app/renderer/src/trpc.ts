@@ -1,6 +1,7 @@
 import { createTRPCProxyClient } from '@trpc/client';
 import { observable } from '@trpc/server/observable';
 import type { AppRouter } from '../../main/router/index';
+import type { UpdateCheckOutcome } from './shared/types/update.types';
 
 export const AUTH_TOKEN_KEY = 'tucajero.auth.token';
 
@@ -19,6 +20,7 @@ declare global {
       onCashSessionClosed: (callback: (info: { sessionIds: number[] }) => void) => () => void;
       downloadUpdate: () => Promise<{ success: boolean }>;
       installUpdate: () => Promise<{ success: boolean }>;
+      checkForUpdates: () => Promise<UpdateCheckOutcome>;
       getAppVersion: () => Promise<string>;
       openFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
       showNotification: (title: string, body: string) => Promise<{ success: boolean; error?: string }>;

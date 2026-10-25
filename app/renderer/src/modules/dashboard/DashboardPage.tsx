@@ -23,6 +23,7 @@ import { StatusBadge } from '../../shared/components/StatusBadge';
 import { LoadingSpinner } from '../../shared/components/LoadingSpinner';
 import { EmptyState } from '../../shared/components/EmptyState';
 import { LoadError } from '../../shared/components/LoadError';
+import { UpdateCheckButton } from '../../shared/components/UpdateCheckButton';
 import type { DashboardSummary } from '../../shared/types/sales.types';
 
 // Se descarga solo al mostrar el gráfico (recharts pesa bastante).
@@ -181,7 +182,7 @@ export default function DashboardPage(): JSX.Element {
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-24 -translate-x-24 pointer-events-none" />
         <div className="relative z-10 flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-xl font-bold select-none">
+            <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center text-xl font-bold select-none">
               {initials}
             </div>
             <div>
@@ -194,15 +195,16 @@ export default function DashboardPage(): JSX.Element {
               </p>
             </div>
           </div>
-          <div className="flex gap-3">
-            <button onClick={() => navigate('/sales')} className="inline-flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 backdrop-blur-sm rounded-lg text-sm font-medium transition-colors">
+          <div className="flex gap-3 flex-wrap items-start">
+            <button onClick={() => navigate('/sales')} className="inline-flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 rounded-lg text-sm font-medium transition-colors">
               <ShoppingCart size={16} />
               {es.sales.posTitle}
             </button>
-            <button onClick={() => navigate('/inventory')} className="inline-flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 backdrop-blur-sm rounded-lg text-sm font-medium transition-colors">
+            <button onClick={() => navigate('/inventory')} className="inline-flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 rounded-lg text-sm font-medium transition-colors">
               <Package size={16} />
               {es.inventory.title}
             </button>
+            <UpdateCheckButton />
           </div>
         </div>
       </div>
