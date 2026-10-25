@@ -68,24 +68,14 @@ export function LoginPage(): JSX.Element {
 
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div
-            style={{
-              width: '60px',
-              height: '60px',
-              borderRadius: 'var(--radius-xl)',
-              background: 'var(--gradient-primary)',
-              color: '#fff',
-              display: 'inline-grid',
-              placeItems: 'center',
-              fontSize: '24px',
-              fontWeight: 800,
-              marginBottom: '18px',
-              boxShadow: '0 8px 20px rgba(54, 65, 245, 0.35)',
-            }}
+          <img
+            src="/isotipo.png"
+            alt=""
+            width={84}
+            height={84}
+            style={{ display: 'inline-block', marginBottom: '14px', objectFit: 'contain' }}
             className="animate-fadeUp"
-          >
-            TC
-          </div>
+          />
           <h1 className="tc-display" style={{ margin: 0, fontSize: '26px', fontWeight: 800, color: 'var(--gray-900)', letterSpacing: '-0.02em' }}>
             {es.app.name}
           </h1>
