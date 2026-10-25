@@ -1,7 +1,9 @@
 node_modules/
 dist/
 release/
-build/
+build/*
+# El icono de la app y del instalador SI va en el repositorio: sin el, la publicacion en GitHub usa el logo de Electron.
+!build/icon.ico
 *.db
 *.db-journal
 *.db-wal
