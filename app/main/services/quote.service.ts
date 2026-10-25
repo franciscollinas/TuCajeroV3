@@ -1,6 +1,7 @@
 import { eq, and, desc, like } from 'drizzle-orm';
 import { getDatabase, schema } from '../db';
 import { AppError, ErrorCode } from '../utils/errors';
+import { nextDocumentNumber } from '../utils/document-number';
 import { nowISO } from '../utils/date';
 import { AuditService } from './audit.service';
 import { SalesService } from './sales.service';
@@ -12,38 +13,7 @@ const auditService = new AuditService();
 const salesService = new SalesService();
 
 async function buildQuoteNumber(): Promise<string> {
-  const db = getDatabase();
-  const year = new Date().getFullYear();
-  const prefix = `COT-${year}-`;
-
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const [lastQuote] = await db
-      .select({ saleNumber: schema.sales.saleNumber })
-      .from(schema.sales)
-      .where(and(
-        like(schema.sales.saleNumber, `${prefix}%`),
-        eq(schema.sales.status, 'QUOTE'),
-      ))
-      .orderBy(desc(schema.sales.saleNumber))
-      .limit(1);
-
-    const nextNumber = lastQuote ? Number(lastQuote.saleNumber.split('-')[2]) + 1 : 1;
-    const candidate = `${prefix}${String(nextNumber).padStart(4, '0')}`;
-
-    try {
-      const [existing] = await db
-        .select({ id: schema.sales.id })
-        .from(schema.sales)
-        .where(eq(schema.sales.saleNumber, candidate))
-        .limit(1);
-
-      if (!existing) return candidate;
-    } catch {
-      if (attempt === 4) throw new AppError(ErrorCode.VALIDATION, 'No se pudo generar el número de cotización. Intente nuevamente.');
-    }
-  }
-
-  throw new AppError(ErrorCode.VALIDATION, 'No se pudo generar el número de cotización. Intente nuevamente.');
+  return nextDocumentNumber(`COT-${new Date().getFullYear()}-`, 'cotización');
 }
 
 function buildSaleItem(row: unknown, product: unknown): SaleItem {

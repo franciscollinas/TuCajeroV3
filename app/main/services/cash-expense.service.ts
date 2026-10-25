@@ -40,30 +40,42 @@ export class CashExpenseService {
     }
 
     const now = nowISO();
-    const [expense] = await db
-      .insert(schema.cashExpenses)
-      .values({
-        accountId,
-        cashSessionId: sessionId,
-        userId,
-        amount,
-        reason: reason.trim(),
-        createdAt: now,
-      })
-      .returning();
+    // Egreso y efectivo esperado se guardan juntos: si algo falla no queda uno sin el otro,
+    // y dos egresos simultáneos suman ambos.
+    const expense = db.transaction((tx) => {
+      const cs = tx
+        .select({ status: schema.cashSessions.status, expectedCash: schema.cashSessions.expectedCash, initialCash: schema.cashSessions.initialCash })
+        .from(schema.cashSessions)
+        .where(eq(schema.cashSessions.id, sessionId))
+        .get();
+      if (!cs || cs.status !== 'OPEN') {
+        throw new AppError(ErrorCode.NO_OPEN_SESSION, 'No existe una caja abierta para registrar el egreso.');
+      }
+      const available = cs.expectedCash ?? cs.initialCash;
+      if (amount > available) {
+        throw new AppError(ErrorCode.VALIDATION, `El egreso supera el efectivo esperado en la caja (${available}).`);
+      }
 
-    const cs = db
-      .select({ expectedCash: schema.cashSessions.expectedCash, initialCash: schema.cashSessions.initialCash })
-      .from(schema.cashSessions)
-      .where(eq(schema.cashSessions.id, sessionId))
-      .get();
+      const created = tx
+        .insert(schema.cashExpenses)
+        .values({
+          accountId,
+          cashSessionId: sessionId,
+          userId,
+          amount,
+          reason: reason.trim(),
+          createdAt: now,
+        })
+        .returning()
+        .get();
 
-    if (cs) {
-      await db
-        .update(schema.cashSessions)
-        .set({ expectedCash: (cs.expectedCash ?? cs.initialCash) - amount })
-        .where(eq(schema.cashSessions.id, sessionId));
-    }
+      tx.update(schema.cashSessions)
+        .set({ expectedCash: available - amount })
+        .where(eq(schema.cashSessions.id, sessionId))
+        .run();
+
+      return created;
+    });
 
     return {
       id: expense.id,

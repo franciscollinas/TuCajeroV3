@@ -1,8 +1,9 @@
-﻿import { eq, and, gte, lt, lte, desc, sum, count, inArray, like, sql } from 'drizzle-orm';
+﻿import { eq, and, gte, lt, lte, desc, sum, count, inArray, sql } from 'drizzle-orm';
 
 import { getDatabase, schema } from '../db';
 import { AppError, ErrorCode } from '../utils/errors';
-import { nowISO } from '../utils/date';
+import { nextDocumentNumber } from '../utils/document-number';
+import { nowISO, toLocalIsoDate } from '../utils/date';
 import { AuditService } from './audit.service';
 import { ReportsService } from './reports.service';
 import { ConfigService } from './config.service';
@@ -46,35 +47,7 @@ function allSaleDataCustomerIds(sales: Array<{ customerId: number | null }>): nu
 }
 
 async function buildSaleNumber(): Promise<string> {
-  const db = getDatabase();
-  const year = new Date().getFullYear();
-  const prefix = `V-${year}-`;
-
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const [lastSale] = await db
-      .select({ saleNumber: schema.sales.saleNumber })
-      .from(schema.sales)
-      .where(like(schema.sales.saleNumber, `${prefix}%`))
-      .orderBy(desc(schema.sales.saleNumber))
-      .limit(1);
-
-    const nextNumber = lastSale ? Number(lastSale.saleNumber.split('-')[2]) + 1 : 1;
-    const candidate = `${prefix}${String(nextNumber).padStart(4, '0')}`;
-
-    try {
-      const [existing] = await db
-        .select({ id: schema.sales.id })
-        .from(schema.sales)
-        .where(eq(schema.sales.saleNumber, candidate))
-        .limit(1);
-
-      if (!existing) return candidate;
-    } catch {
-      if (attempt === 4) throw new AppError(ErrorCode.VALIDATION, 'No se pudo generar el número de venta. Intente nuevamente.');
-    }
-  }
-
-  throw new AppError(ErrorCode.VALIDATION, 'No se pudo generar el número de venta. Intente nuevamente.');
+  return nextDocumentNumber(`V-${new Date().getFullYear()}-`, 'venta');
 }
 
 export class SalesService {
@@ -96,6 +69,15 @@ export class SalesService {
     deliveryFee = roundMoney(deliveryFee);
     if (items.length === 0) {
       throw new AppError(ErrorCode.EMPTY_CART, 'El carrito está vacío.');
+    }
+
+    for (const line of items) {
+      if (!(line.quantity > 0)) {
+        throw new AppError(ErrorCode.VALIDATION, 'La cantidad de cada producto debe ser mayor a cero.');
+      }
+    }
+    if (discount < 0 || (discountType === 'percentage' && discount > 100)) {
+      throw new AppError(ErrorCode.VALIDATION, 'El descuento no es válido: debe estar entre 0 y 100 %.');
     }
 
     if (payments.length === 0 && !isCreditSale) {
@@ -167,6 +149,9 @@ export class SalesService {
         throw new AppError(ErrorCode.PRODUCT_NOT_FOUND, `Producto ${item.productId} no encontrado.`);
       }
       const lineSubtotal = lineAmount(item.quantity, item.unitPrice);
+      if (item.discount < 0 || item.discount > lineSubtotal) {
+        throw new AppError(ErrorCode.VALIDATION, `El descuento de "${product.name}" no puede ser negativo ni mayor que su valor.`);
+      }
       const lineNet = lineSubtotal - item.discount;
       subtotal += lineNet;
       if (ivaEnabled) {
@@ -175,6 +160,9 @@ export class SalesService {
     }
 
     const finalDiscount = discountType === 'percentage' ? percentOf(subtotal, discount) : roundMoney(discount);
+    if (finalDiscount > subtotal) {
+      throw new AppError(ErrorCode.VALIDATION, 'El descuento no puede ser mayor al subtotal de la venta.');
+    }
     const total = subtotal + tax + deliveryFee - finalDiscount;
 
     const paidPayments = payments.filter((p) => p.method !== 'credito');
@@ -207,7 +195,7 @@ export class SalesService {
             if (!product || !product.isActive) {
               throw new AppError(ErrorCode.PRODUCT_NOT_FOUND, `Producto ${item.productId} no encontrado.`);
             }
-            if (product.expiryDate && product.expiryDate < now) {
+            if (product.expiryDate && product.expiryDate.slice(0, 10) < toLocalIsoDate(new Date())) {
               throw new AppError(ErrorCode.PRODUCT_EXPIRED, `"${product.name}" está vencido.`);
             }
             if (product.stock < item.quantity) {
@@ -683,6 +671,7 @@ export class SalesService {
         cashSessionId: schema.sales.cashSessionId,
         change: schema.sales.change,
         branchId: schema.sales.branchId,
+        total: schema.sales.total,
       })
       .from(schema.sales)
       .where(and(eq(schema.sales.id, id), eq(schema.sales.accountId, accountId)))
@@ -706,31 +695,31 @@ export class SalesService {
       .from(schema.payments)
       .where(eq(schema.payments.saleId, id));
 
-    const productIds = saleItems.map((i) => i.productId);
-    const products = productIds.length > 0
-      ? await db
-          .select()
-          .from(schema.products)
-          .where(inArray(schema.products.id, productIds))
-      : [];
-
-    const productMap = new Map(products.map((p) => [p.id, p]));
     const now = nowISO();
 
     await db.transaction((tx) => {
-      tx.update(schema.sales)
+      // Se anula solo si sigue en el estado leído: dos anulaciones a la vez no
+      // pueden devolver el stock ni descontar el efectivo dos veces.
+      const cancelled = tx.update(schema.sales)
         .set({ status: 'CANCELLED' })
-        .where(eq(schema.sales.id, id))
+        .where(and(eq(schema.sales.id, id), eq(schema.sales.status, sale.status)))
         .run();
+      if (cancelled.changes === 0) {
+        throw new AppError(ErrorCode.VALIDATION, 'La venta ya fue cancelada.');
+      }
 
       for (const item of saleItems) {
-        const product = productMap.get(item.productId);
+        const product = tx
+          .select({ stock: schema.products.stock })
+          .from(schema.products)
+          .where(eq(schema.products.id, item.productId))
+          .get();
         if (!product) continue;
 
         const restoredStock = product.stock + item.quantity;
 
         tx.update(schema.products)
-          .set({ stock: restoredStock, updatedAt: now })
+          .set({ stock: sql`${schema.products.stock} + ${item.quantity}`, updatedAt: now })
           .where(eq(schema.products.id, item.productId))
           .run();
 
@@ -756,19 +745,45 @@ export class SalesService {
 
         if (netCashAmount > 0) {
           const cs = tx
-            .select({
-              expectedCash: schema.cashSessions.expectedCash,
-              initialCash: schema.cashSessions.initialCash,
-              status: schema.cashSessions.status,
-            })
+            .select({ status: schema.cashSessions.status })
             .from(schema.cashSessions)
             .where(eq(schema.cashSessions.id, sale.cashSessionId))
             .get();
 
           if (cs && cs.status === 'OPEN') {
             tx.update(schema.cashSessions)
-              .set({ expectedCash: (cs.expectedCash ?? cs.initialCash) - netCashAmount })
+              .set({ expectedCash: sql`coalesce(${schema.cashSessions.expectedCash}, ${schema.cashSessions.initialCash}) - ${netCashAmount}` })
               .where(eq(schema.cashSessions.id, sale.cashSessionId))
+              .run();
+          } else {
+            // La caja donde se cobró ya cerró: el efectivo se devuelve desde la caja
+            // abierta de quien anula, y queda registrado como egreso.
+            const current = tx
+              .select({ id: schema.cashSessions.id })
+              .from(schema.cashSessions)
+              .where(and(
+                eq(schema.cashSessions.userId, userId),
+                eq(schema.cashSessions.accountId, accountId),
+                eq(schema.cashSessions.status, 'OPEN'),
+              ))
+              .get();
+            if (!current) {
+              throw new AppError(
+                ErrorCode.NO_OPEN_SESSION,
+                'Esta venta se cobró en una caja que ya cerró. Necesitas una caja abierta para registrar la devolución del efectivo: ábrela y vuelve a anularla.',
+              );
+            }
+            tx.insert(schema.cashExpenses).values({
+              accountId,
+              cashSessionId: current.id,
+              userId,
+              amount: netCashAmount,
+              reason: `Devolución de venta ${sale.saleNumber}`,
+              createdAt: now,
+            }).run();
+            tx.update(schema.cashSessions)
+              .set({ expectedCash: sql`coalesce(${schema.cashSessions.expectedCash}, ${schema.cashSessions.initialCash}) - ${netCashAmount}` })
+              .where(eq(schema.cashSessions.id, current.id))
               .run();
           }
         }
@@ -807,7 +822,7 @@ export class SalesService {
       action: 'sale:cancelled',
       entity: 'Sale',
       entityId: sale.id,
-      payload: { saleNumber: sale.saleNumber, total: saleItems.reduce((s, i) => s + i.total, 0) },
+      payload: { saleNumber: sale.saleNumber, total: sale.total },
     });
 
     return { success: true };

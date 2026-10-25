@@ -148,6 +148,9 @@ export class CashSessionService {
   ): Promise<CashCloseSummary> {
     finalCash = roundMoney(finalCash);
     expectedCash = roundMoney(expectedCash);
+    if (finalCash < 0) {
+      throw new AppError(ErrorCode.VALIDATION, 'El efectivo contado no puede ser negativo.');
+    }
     const db = getDatabase();
 
     const [session] = await db
@@ -170,7 +173,8 @@ export class CashSessionService {
     const difference = finalCash - serverExpected;
     const now = nowISO();
 
-    await db
+    // Solo cierra si sigue abierta: cerrar dos veces a la vez no duplica el cierre ni su auditoría.
+    const closed = db
       .update(schema.cashSessions)
       .set({
         closedAt: now,
@@ -179,7 +183,11 @@ export class CashSessionService {
         difference,
         status: 'CLOSED',
       })
-      .where(eq(schema.cashSessions.id, sessionId));
+      .where(and(eq(schema.cashSessions.id, sessionId), eq(schema.cashSessions.status, 'OPEN')))
+      .run();
+    if (closed.changes === 0) {
+      throw new AppError(ErrorCode.NO_OPEN_SESSION, 'La caja ya fue cerrada.');
+    }
 
     await auditService.log({
       userId: session.userId,
