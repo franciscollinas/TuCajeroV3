@@ -28,7 +28,10 @@ function getLogger(): pino.Logger {
       level: 'info',
       timestamp: pino.stdTimeFunctions.isoTime,
     },
-    pino.destination(logFile),
+    // Síncrono: queda listo al instante. Si fuera asíncrono, una segunda copia de la app (que se cierra
+    // al arrancar por la instancia única) salía con el error «sonic boom is not ready yet» al terminar.
+    // Se escriben pocas líneas, así que no pesa.
+    pino.destination({ dest: logFile, sync: true }),
   );
 }
 

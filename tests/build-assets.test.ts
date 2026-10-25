@@ -1,6 +1,6 @@
 import { execSync } from 'child_process';
-import { existsSync, readFileSync } from 'fs';
-import { resolve } from 'path';
+import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
+import { join, resolve } from 'path';
 import { describe, expect, it } from 'vitest';
 
 const icon = resolve('build/icon.ico');
@@ -47,5 +47,23 @@ describe('icono de la aplicación', () => {
   it('está en el repositorio (no ignorado por git)', () => {
     if (!existsSync(resolve('.git'))) return; // copia sin historial: nada que comprobar
     expect(() => execSync('git ls-files --error-unmatch build/icon.ico', { stdio: 'pipe' })).not.toThrow();
+  });
+
+  // La app instalada abre la interfaz como archivo local (file://): una imagen con ruta que empieza por "/"
+  // apunta a la raíz del disco y sale rota. Las imágenes deben calcularse con LOGO_URL (document.baseURI).
+  it('ninguna imagen de la interfaz usa una ruta absoluta (se rompería en la app instalada)', () => {
+    const files: string[] = [];
+    const walk = (dir: string): void => {
+      for (const name of readdirSync(dir)) {
+        const full = join(dir, name);
+        if (statSync(full).isDirectory()) walk(full);
+        else if (/\.tsx?$/.test(name)) files.push(full);
+      }
+    };
+    walk(resolve('app/renderer/src'));
+    // <img src="/x.png">, <img src={'/x.png'}> o `src: '/x.png'`
+    const absoluteImage = /(?:<img[^>]*\ssrc=|\bsrc:\s*)[{\s]*["'`]\/[a-zA-Z]/;
+    const offenders = files.filter((file) => absoluteImage.test(readFileSync(file, 'utf8')));
+    expect(offenders).toEqual([]);
   });
 });

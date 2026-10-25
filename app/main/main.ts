@@ -1,4 +1,4 @@
-import { app, BrowserWindow, session, dialog } from 'electron';
+import { app, BrowserWindow, Menu, session, dialog } from 'electron';
 import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 import { registerIpc } from './router/ipc-bridge';
@@ -69,6 +69,10 @@ function loadEnvFile(): void {
 loadEnvFile();
 
 function createWindow(): void {
+  // En la app instalada no se muestra la barra de menús de Electron (File, Edit, View, Window): no es
+  // parte del punto de venta y deja abrir herramientas de desarrollo y recargar. En desarrollo se conserva.
+  if (!isDev) Menu.setApplicationMenu(null);
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
