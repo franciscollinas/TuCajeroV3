@@ -54,6 +54,11 @@ export function getAppDataDir(): string {
   return getUserDataPath() ?? process.cwd();
 }
 
+/** true solo en la aplicación instalada (empaquetada); false en desarrollo, pruebas y scripts. */
+export function isPackagedApp(): boolean {
+  return getElectronApp()?.isPackaged === true;
+}
+
 export const DATABASE_PATH = process.env.DATABASE_URL || './database/tucajero.db';
 
 export function getDatabasePath(): string {
