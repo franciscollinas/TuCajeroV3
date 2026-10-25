@@ -93,6 +93,7 @@ function openAndPrepare(): void {
     ensureOptionalColumns(sqliteInstance);
     ensureTaxRateFraction(sqliteInstance);
     ensureDailyAuditTable(sqliteInstance);
+    ensureIndexes(sqliteInstance);
     ensureMoneyIntegers(sqliteInstance, `${dbPath}.pre-money-int.bak`);
 
     // quick_check devuelve una fila con la columna `quick_check` (no `integrity_check`).
@@ -128,6 +129,18 @@ export function closeDatabase(): void {
 
 export function getDatabasePathForTesting(): string {
   return dbPath;
+}
+
+// Índices que faltaban para los reportes, los abonos y la anulación de ventas. Las migraciones
+// de drizzle solo corren con la base vacía, así que se aplican siempre (IF NOT EXISTS).
+export function ensureIndexes(sqlite: Database.Database): void {
+  const statements = [
+    'CREATE INDEX IF NOT EXISTS idx_payment_debt ON "Payment" ("debtId")',
+    'CREATE INDEX IF NOT EXISTS idx_payment_created ON "Payment" ("createdAt")',
+    'CREATE INDEX IF NOT EXISTS idx_debt_sale ON "Debt" ("saleId")',
+    'CREATE INDEX IF NOT EXISTS idx_sale_account_status_created ON "Sale" ("accountId", "status", "createdAt")',
+  ];
+  for (const statement of statements) sqlite.exec(statement);
 }
 
 function schemaIsEmpty(sqlite: Database.Database): boolean {

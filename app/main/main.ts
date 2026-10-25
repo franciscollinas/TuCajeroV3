@@ -26,6 +26,13 @@ const AUTO_CLOSE_SWEEP_MS = 5 * 60 * 1000;
 const AUTO_BACKUP_DELAY_MS = 20 * 1000;
 const AUTO_BACKUP_CHECK_MS = 6 * 60 * 60 * 1000;
 
+// Dos copias abiertas a la vez escribirían sobre la misma base de datos. Solo en la app instalada:
+// en desarrollo se pueden abrir varias para probar.
+const gotSingleInstanceLock = isDev || app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
 let mainWindow: BrowserWindow | null = null;
 let autoCloseTimer: NodeJS.Timeout | null = null;
 let autoBackupTimer: NodeJS.Timeout | null = null;
@@ -148,6 +155,18 @@ function startAutoCloseSweeper(): void {
   autoCloseTimer.unref();
 }
 
+app.on('second-instance', () => {
+  // Si abren la app otra vez, se trae al frente la ventana que ya existe.
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.error({ reason }, 'Promesa rechazada sin manejar');
+});
+
 /** Copia automática diaria de la base (solo si la última tiene más de 20 horas). Nunca interrumpe la app. */
 function runAutoBackup(): void {
   new BackupService()
@@ -164,6 +183,7 @@ function startAutoBackups(): void {
 }
 
 app.whenReady().then(async () => {
+  if (!gotSingleInstanceLock) return;
   try {
     // Antes de que una versión nueva modifique la base, se guarda una copia (una vez por versión).
     setBeforeUpgradeHook((sqlite) => {
