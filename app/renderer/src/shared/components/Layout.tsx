@@ -12,6 +12,7 @@ import { es } from '../i18n';
 import { AboutModal } from './AboutModal';
 import { GrainOverlay } from './GrainOverlay';
 import { UpdateBanner } from './UpdateBanner';
+import { BusinessAvatar } from './BusinessAvatar';
 import { LOGO_URL } from '../utils/assets';
 
 interface LayoutProps { children: ReactNode; }
@@ -144,9 +145,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
               </svg>
             </button>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flex: '0 0 auto' }}>
-              <div style={{ width: 44, height: 44, borderRadius: 'var(--radius-lg)', background: config?.businessName ? 'var(--gradient-primary)' : '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 16, fontWeight: 800, border: '2px solid var(--gray-100)' }}>
-                {config?.businessName ? config.businessName.charAt(0).toUpperCase() : 'TC'}
-              </div>
+              <BusinessAvatar businessName={config?.businessName} logo={config?.logo} />
               <div style={{ minWidth: 0 }}>
                 <h1 className="tc-header-title">{config?.businessName || 'TuCajero'}</h1>
                 <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--gray-400)', fontWeight: 500 }}>{pageTitle(location.pathname)}</p>
