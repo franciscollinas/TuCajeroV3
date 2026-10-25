@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useCallback, useRef } from 'react';
+import { ReactNode, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 
 export interface ModalProps {
@@ -17,22 +17,26 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md', c
   const modalRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
-  const handleEscape = useCallback((e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }, [onClose]);
+  // Siempre la última versión de onClose. La mayoría de las pantallas la pasan escrita en línea
+  // (una función nueva en cada dibujado); si el efecto dependiera de ella, se repetiría con cada letra
+  // que se escribe en un campo y el foco saltaría al botón de cerrar.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!isOpen) return;
 
     previousFocusRef.current = document.activeElement as HTMLElement;
 
+    // El foco inicial va al primer campo del formulario; si no hay campos, al primer elemento enfocable.
     const modal = modalRef.current;
     if (modal) {
-      const focusable = modal.querySelectorAll<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
-      if (focusable.length > 0) focusable[0].focus();
-      else modal.focus();
+      const firstField = modal.querySelector<HTMLElement>('input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])');
+      const firstFocusable = modal.querySelector<HTMLElement>('button, [href], [tabindex]:not([tabindex="-1"])');
+      (firstField ?? firstFocusable ?? modal).focus();
     }
 
+    const handleEscape = (e: KeyboardEvent) => { if (e.key === 'Escape') onCloseRef.current(); };
     document.addEventListener('keydown', handleEscape);
     document.body.style.overflow = 'hidden';
 
@@ -41,7 +45,7 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md', c
       document.body.style.overflow = '';
       previousFocusRef.current?.focus();
     };
-  }, [isOpen, handleEscape]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
