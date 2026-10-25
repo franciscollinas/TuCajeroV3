@@ -24,7 +24,31 @@ export interface DailyAuditLogEntry {
   updatedAt: string;
 }
 
+type DatabaseTransaction = Parameters<Parameters<ReturnType<typeof getDatabase>['transaction']>[0]>[0];
+
 export class AuditService {
+  /**
+   * Registra el evento dentro de la transacción de quien llama: queda guardado o se
+   * deshace junto con la operación (una venta nunca existe sin su auditoría).
+   * A diferencia de `log`, no reintenta ni se traga errores: si falla, falla la operación.
+   */
+  logInTransaction(
+    tx: DatabaseTransaction,
+    input: { userId: number; accountId: number | null; action: string; entity: string; entityId?: number; payload: unknown },
+  ): void {
+    tx.insert(schema.auditLogs)
+      .values({
+        accountId: input.accountId,
+        userId: input.userId,
+        action: input.action,
+        entity: input.entity,
+        entityId: input.entityId ?? null,
+        payload: JSON.stringify(input.payload ?? {}),
+        createdAt: nowISO(),
+      })
+      .run();
+  }
+
   async log(input: {
     userId: number;
     action: string;
