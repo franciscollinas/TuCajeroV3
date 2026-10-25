@@ -4,12 +4,14 @@ import { useAuth } from '../context/AuthContext';
 
 export function useNotifications(): void {
   const { user } = useAuth();
-  const { fetchAlerts, stockAlerts, expiryAlerts } = useAlertStore();
+  const fetchAlerts = useAlertStore((state) => state.fetchAlerts);
   const notifiedItems = useRef<Set<string>>(new Set());
 
   const checkAndNotify = useCallback(async () => {
     if (!user) return;
     await fetchAlerts();
+    // Se lee el estado ya actualizado: si viniera del render, avisaría con datos de la vuelta anterior.
+    const { stockAlerts, expiryAlerts } = useAlertStore.getState();
 
     const stockCritical = stockAlerts?.critical ?? [];
     const expired = expiryAlerts?.expired ?? [];
@@ -56,7 +58,7 @@ export function useNotifications(): void {
         }
       }
     }
-  }, [user, fetchAlerts, stockAlerts, expiryAlerts]);
+  }, [user, fetchAlerts]);
 
   useEffect(() => {
     if (!user) return;

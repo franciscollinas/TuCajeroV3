@@ -2,7 +2,7 @@ import { eq, and, or, like, gt, gte, inArray, desc, asc, sum, count, sql } from 
 
 import { getDatabase, schema } from '../db';
 import { ErrorCode, AppError } from '../utils/errors';
-import { nowISO } from '../utils/date';
+import { nowISO, toLocalIsoDate, addDays } from '../utils/date';
 import { logger } from '../utils/logger';
 import { AuditService } from './audit.service';
 import type {
@@ -735,106 +735,88 @@ export class InventoryService {
     return mapStockMovement(movement);
   }
 
-  async getStockAlerts(_branchId?: number, accountId?: number | null): Promise<StockAlerts> {
-    const db = getDatabase();
-
-    const rows = await db
-      .select({
-        id: schema.products.id,
-        code: schema.products.code,
-        barcode: schema.products.barcode,
-        name: schema.products.name,
-        description: schema.products.description,
-        categoryId: schema.products.categoryId,
-        categoryName: schema.categories.name,
-        categoryColor: schema.categories.color,
-        price: schema.products.price,
-        cost: schema.products.cost,
-        stock: schema.products.stock,
-        minStock: schema.products.minStock,
-        criticalStock: schema.products.criticalStock,
-        taxRate: schema.products.taxRate,
-        suggestedPurchaseQty: schema.products.suggestedPurchaseQty,
-        expiryDate: schema.products.expiryDate,
-        location: schema.products.location,
-        unitType: schema.products.unitType,
-        conversionFactor: schema.products.conversionFactor,
-        isActive: schema.products.isActive,
-        createdAt: schema.products.createdAt,
-        updatedAt: schema.products.updatedAt,
-      })
-      .from(schema.products)
-      .leftJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
-      .where(and(eq(schema.products.isActive, true), ...(accountId ? [eq(schema.products.accountId, accountId)] : [])));
-
-    const mapped = rows.map((r) => mapProduct(r));
-
+  /** Columnas que necesita `mapProduct` para armar un producto de alerta. */
+  private alertProductColumns() {
     return {
-      critical: mapped.filter((p) => p.stock <= p.criticalStock),
-      warning: mapped.filter(
-        (p) => p.stock > p.criticalStock && p.stock <= p.minStock,
-      ),
-      ok: mapped.filter((p) => p.stock > p.minStock),
-      expired: mapped.filter(
-        (p) => p.expiryDate && new Date(p.expiryDate) < new Date(),
-      ),
-      expiringSoon: mapped.filter((p) => {
-        if (!p.expiryDate) return false;
-        const today = new Date();
-        const next30Days = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
-        const expiry = new Date(p.expiryDate);
-        return expiry >= today && expiry <= next30Days;
-      }),
+      id: schema.products.id,
+      code: schema.products.code,
+      barcode: schema.products.barcode,
+      name: schema.products.name,
+      description: schema.products.description,
+      categoryId: schema.products.categoryId,
+      categoryName: schema.categories.name,
+      categoryColor: schema.categories.color,
+      price: schema.products.price,
+      cost: schema.products.cost,
+      stock: schema.products.stock,
+      minStock: schema.products.minStock,
+      criticalStock: schema.products.criticalStock,
+      taxRate: schema.products.taxRate,
+      suggestedPurchaseQty: schema.products.suggestedPurchaseQty,
+      expiryDate: schema.products.expiryDate,
+      location: schema.products.location,
+      unitType: schema.products.unitType,
+      conversionFactor: schema.products.conversionFactor,
+      isActive: schema.products.isActive,
+      createdAt: schema.products.createdAt,
+      updatedAt: schema.products.updatedAt,
     };
   }
 
-  async getExpiryAlerts(_branchId?: number, accountId?: number | null): Promise<ExpiryAlerts> {
+  /**
+   * Alertas de stock. Solo trae los productos que están en alerta (crítico o bajo);
+   * los que están bien se cuentan en `okCount` sin enviarlos, porque esta consulta
+   * se repite cada 30 s en el Inicio y antes devolvía todo el catálogo.
+   */
+  async getStockAlerts(_branchId?: number, accountId?: number | null): Promise<StockAlerts> {
     const db = getDatabase();
+    const scope = and(eq(schema.products.isActive, true), ...(accountId ? [eq(schema.products.accountId, accountId)] : []));
 
     const rows = await db
-      .select({
-        id: schema.products.id,
-        code: schema.products.code,
-        barcode: schema.products.barcode,
-        name: schema.products.name,
-        description: schema.products.description,
-        categoryId: schema.products.categoryId,
-        categoryName: schema.categories.name,
-        categoryColor: schema.categories.color,
-        price: schema.products.price,
-        cost: schema.products.cost,
-        stock: schema.products.stock,
-        minStock: schema.products.minStock,
-        criticalStock: schema.products.criticalStock,
-        taxRate: schema.products.taxRate,
-        suggestedPurchaseQty: schema.products.suggestedPurchaseQty,
-        expiryDate: schema.products.expiryDate,
-        location: schema.products.location,
-        unitType: schema.products.unitType,
-        conversionFactor: schema.products.conversionFactor,
-        isActive: schema.products.isActive,
-        createdAt: schema.products.createdAt,
-        updatedAt: schema.products.updatedAt,
-      })
+      .select(this.alertProductColumns())
       .from(schema.products)
       .leftJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
-      .where(and(eq(schema.products.isActive, true), sql`${schema.products.expiryDate} IS NOT NULL`, ...(accountId ? [eq(schema.products.accountId, accountId)] : [])));
+      .where(and(scope, sql`${schema.products.stock} <= max(${schema.products.minStock}, ${schema.products.criticalStock})`))
+      .orderBy(asc(schema.products.id));
+    const [totals] = await db.select({ total: count() }).from(schema.products).where(scope);
 
     const mapped = rows.map((r) => mapProduct(r));
-    const now = new Date();
-    const next30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
     return {
-      expired: mapped.filter((p) => p.expiryDate && new Date(p.expiryDate) < now),
-      expiringSoon: mapped.filter((p) => {
-        if (!p.expiryDate) return false;
-        const expiry = new Date(p.expiryDate);
-        return expiry >= now && expiry <= next30Days;
-      }),
-      ok: mapped.filter((p) => {
-        if (!p.expiryDate) return false;
-        return new Date(p.expiryDate) > next30Days;
-      }),
+      critical: mapped.filter((p) => p.stock <= p.criticalStock),
+      warning: mapped.filter((p) => p.stock > p.criticalStock && p.stock <= p.minStock),
+      okCount: Math.max(0, (totals?.total ?? 0) - mapped.length),
+    };
+  }
+
+  /**
+   * Alertas de vencimiento. Misma regla que la venta: vencido es una fecha anterior a hoy
+   * (vence hoy todavía se vende). Solo trae vencidos y los que vencen en 30 días.
+   */
+  async getExpiryAlerts(_branchId?: number, accountId?: number | null): Promise<ExpiryAlerts> {
+    const db = getDatabase();
+    const today = toLocalIsoDate(new Date());
+    const limit = toLocalIsoDate(addDays(new Date(), COVERAGE_DAYS));
+    const day = sql`substr(${schema.products.expiryDate}, 1, 10)`;
+    const scope = and(
+      eq(schema.products.isActive, true),
+      sql`${day} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'`,
+      ...(accountId ? [eq(schema.products.accountId, accountId)] : []),
+    );
+
+    const rows = await db
+      .select(this.alertProductColumns())
+      .from(schema.products)
+      .leftJoin(schema.categories, eq(schema.products.categoryId, schema.categories.id))
+      .where(and(scope, sql`${day} <= ${limit}`))
+      .orderBy(asc(schema.products.expiryDate), asc(schema.products.id));
+    const [totals] = await db.select({ total: count() }).from(schema.products).where(scope);
+
+    const mapped = rows.map((r) => mapProduct(r));
+    const isExpired = (p: Product): boolean => (p.expiryDate ?? '').slice(0, 10) < today;
+    return {
+      expired: mapped.filter(isExpired),
+      expiringSoon: mapped.filter((p) => !isExpired(p)),
+      okCount: Math.max(0, (totals?.total ?? 0) - mapped.length),
     };
   }
 

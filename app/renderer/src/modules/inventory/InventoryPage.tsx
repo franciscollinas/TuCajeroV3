@@ -378,7 +378,7 @@ export default function InventoryPage(): JSX.Element {
 
   const criticalCount = stockAlerts?.critical.length ?? 0;
   const warningCount = stockAlerts?.warning.length ?? 0;
-  const okCount = stockAlerts?.ok.length ?? 0;
+  const okCount = stockAlerts?.okCount ?? 0;
 
   const handleExport = async (format: 'csv' | 'xlsx' = 'csv') => {
     setExporting(true);

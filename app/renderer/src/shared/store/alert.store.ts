@@ -47,36 +47,31 @@ export const useAlertStore = create<AlertState>((set, get) => ({
       const stockData = stock as StockAlerts;
       const expiryData = expiry as ExpiryAlerts;
 
-      const criticalProducts: Product[] = [
-        ...(stockData?.critical ?? []),
-        ...(expiryData?.expired ?? []),
-      ];
-      const warningProducts: Product[] = [
-        ...(stockData?.warning ?? []),
-        ...(expiryData?.expiringSoon ?? []),
-      ];
+      const createdAt = new Date().toISOString();
+      const build = (
+        products: Product[],
+        kind: string,
+        category: AlertCategory,
+        severity: AlertSeverity,
+        title: string,
+        message: (p: Product) => string,
+      ): Alert[] =>
+        products.map((p) => ({
+          id: `${kind}-${p.id}-${createdAt}`,
+          category,
+          severity,
+          title: `${title}: ${p.name}`,
+          message: message(p),
+          productId: p.id,
+          createdAt,
+          dismissed: false,
+        }));
 
       const alerts: Alert[] = [
-        ...criticalProducts.map((p) => ({
-          id: `critical-${p.id}-${Date.now()}`,
-          category: 'stock' as AlertCategory,
-          severity: 'critical' as AlertSeverity,
-          title: `Stock crítico: ${p.name}`,
-          message: `Stock actual: ${p.stock}. Mínimo: ${p.minStock}`,
-          productId: p.id,
-          createdAt: new Date().toISOString(),
-          dismissed: false,
-        })),
-        ...warningProducts.map((p) => ({
-          id: `warning-${p.id}-${Date.now()}`,
-          category: 'stock' as AlertCategory,
-          severity: 'warning' as AlertSeverity,
-          title: `Stock bajo: ${p.name}`,
-          message: `Stock actual: ${p.stock}`,
-          productId: p.id,
-          createdAt: new Date().toISOString(),
-          dismissed: false,
-        })),
+        ...build(stockData?.critical ?? [], 'stock-critical', 'stock', 'critical', 'Stock crítico', (p) => `Stock actual: ${p.stock}. Mínimo: ${p.minStock}`),
+        ...build(expiryData?.expired ?? [], 'expired', 'expiry', 'critical', 'Producto vencido', (p) => `Vencido el ${p.expiryDate ?? ''}`),
+        ...build(stockData?.warning ?? [], 'stock-warning', 'stock', 'warning', 'Stock bajo', (p) => `Stock actual: ${p.stock}`),
+        ...build(expiryData?.expiringSoon ?? [], 'expiring', 'expiry', 'warning', 'Vence pronto', (p) => `Vence el ${p.expiryDate ?? ''}`),
       ];
 
       set({

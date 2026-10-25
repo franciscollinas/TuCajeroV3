@@ -108,15 +108,15 @@ export interface BulkImportResult {
 export interface StockAlerts {
   critical: Product[];
   warning: Product[];
-  ok: Product[];
-  expired: Product[];
-  expiringSoon: Product[];
+  /** Cantidad de productos con stock suficiente (no se envían). */
+  okCount: number;
 }
 
 export interface ExpiryAlerts {
   expired: Product[];
   expiringSoon: Product[];
-  ok: Product[];
+  /** Cantidad de productos con vencimiento lejano (no se envían). */
+  okCount: number;
 }
 
 export interface StockAdjustmentResult {
