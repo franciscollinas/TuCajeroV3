@@ -10,6 +10,8 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import Database from 'better-sqlite3';
+import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { readFileSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
@@ -159,11 +161,10 @@ function createDatabase(): void {
   mkdirSync(dir, { recursive: true });
   const sqlite = new Database(dbPath);
   sqlite.pragma('foreign_keys = ON');
-  const migration = readFileSync(resolve('database/migrations/0000_melodic_barracuda.sql'), 'utf8')
-    .split('\n')
-    .filter((line) => !line.includes('--> statement-breakpoint'))
-    .join('\n');
-  sqlite.exec(migration);
+  // Migraciones reales (con sus índices). Antes se leía el .sql descartando las líneas con
+  // '--> statement-breakpoint', que son justo las de CREATE INDEX: la base de la prueba quedaba sin
+  // ningún índice y cada consulta recorría tablas enteras (la suite tardaba horas).
+  migrate(drizzle(sqlite), { migrationsFolder: resolve('database/migrations') });
   sqlite.exec(`
     INSERT INTO "Account" (name, nit, email, createdAt, updatedAt) VALUES ('Test Account', '900000001', 'test@test.com', '${NOW}', '${NOW}');
     INSERT INTO "Account" (name, nit, email, createdAt, updatedAt) VALUES ('Account B', '900000002', 'b@test.com', '${NOW}', '${NOW}');
