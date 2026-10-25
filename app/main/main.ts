@@ -3,7 +3,8 @@ import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 import { registerIpc } from './router/ipc-bridge';
 import { setupAutoUpdater } from './updater';
-import { getDatabase, closeDatabase } from './db';
+import { getDatabase, closeDatabase, setBeforeUpgradeHook, consumeRecoveryNotice } from './db';
+import { BackupService } from './services/backup.service';
 import { ensureBootstrap } from './services/bootstrap.service';
 import { CashSessionService } from './services/cash-session.service';
 import { AuditService } from './services/audit.service';
@@ -22,6 +23,8 @@ const isDev = !app.isPackaged;
 
 const AUTO_CLOSE_INACTIVITY_HOURS = 3;
 const AUTO_CLOSE_SWEEP_MS = 5 * 60 * 1000;
+const AUTO_BACKUP_DELAY_MS = 20 * 1000;
+const AUTO_BACKUP_CHECK_MS = 6 * 60 * 60 * 1000;
 
 // Dos copias abiertas a la vez escribirían sobre la misma base de datos. Solo en la app instalada:
 // en desarrollo se pueden abrir varias para probar.
@@ -32,6 +35,7 @@ if (!gotSingleInstanceLock) {
 
 let mainWindow: BrowserWindow | null = null;
 let autoCloseTimer: NodeJS.Timeout | null = null;
+let autoBackupTimer: NodeJS.Timeout | null = null;
 
 function loadEnvFile(): void {
   const baseDir = isDev ? process.cwd() : path.dirname(app.getPath('exe'));
@@ -163,9 +167,30 @@ process.on('unhandledRejection', (reason) => {
   logger.error({ reason }, 'Promesa rechazada sin manejar');
 });
 
+/** Copia automática diaria de la base (solo si la última tiene más de 20 horas). Nunca interrumpe la app. */
+function runAutoBackup(): void {
+  new BackupService()
+    .createAutoBackupIfDue()
+    .then((entry) => { if (entry) logger.info({ file: entry.fileName }, 'Copia automática de la base de datos creada'); })
+    .catch((err) => logger.error({ err }, 'Falló la copia automática de la base de datos'));
+}
+
+function startAutoBackups(): void {
+  const first = setTimeout(runAutoBackup, AUTO_BACKUP_DELAY_MS);
+  first.unref();
+  autoBackupTimer = setInterval(runAutoBackup, AUTO_BACKUP_CHECK_MS);
+  autoBackupTimer.unref();
+}
+
 app.whenReady().then(async () => {
   if (!gotSingleInstanceLock) return;
   try {
+    // Antes de que una versión nueva modifique la base, se guarda una copia (una vez por versión).
+    setBeforeUpgradeHook((sqlite) => {
+      new BackupService({ getRawDatabase: () => sqlite })
+        .createPreUpgradeBackupIfNeeded(app.getVersion())
+        .catch((err) => logger.error({ err }, 'Falló la copia previa a la actualización'));
+    });
     // Initialize database on startup
     getDatabase();
     logger.info('Database initialized');
@@ -188,6 +213,19 @@ app.whenReady().then(async () => {
 
   createWindow();
   startAutoCloseSweeper();
+  startAutoBackups();
+
+  const recovery = consumeRecoveryNotice();
+  if (recovery) {
+    dialog.showMessageBox({
+      type: 'warning',
+      title: 'Base de datos recuperada',
+      message: 'La base de datos estaba dañada y se restauró desde una copia de seguridad.',
+      detail: `Copia usada: ${recovery.restoredFrom}.
+Lo registrado después de esa copia no se recuperó. El archivo dañado se guardó aparte en:
+${recovery.quarantinedTo}`,
+    }).catch(() => undefined);
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -206,6 +244,10 @@ app.on('before-quit', () => {
   if (autoCloseTimer) {
     clearInterval(autoCloseTimer);
     autoCloseTimer = null;
+  }
+  if (autoBackupTimer) {
+    clearInterval(autoBackupTimer);
+    autoBackupTimer = null;
   }
   closeDatabase();
 });

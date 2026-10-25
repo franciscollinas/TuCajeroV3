@@ -63,6 +63,8 @@ export function getDatabasePath(): string {
 }
 
 export function getBackupsDir(): string {
+  // TUCAJERO_BACKUP_DIR permite aislar las copias en pruebas y en instalaciones especiales.
+  if (process.env.TUCAJERO_BACKUP_DIR) return resolve(process.env.TUCAJERO_BACKUP_DIR);
   return resolve(getAppDataDir(), 'backups');
 }
 
