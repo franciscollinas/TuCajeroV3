@@ -416,11 +416,13 @@ export default function CashRegisterPage(): JSX.Element {
         <div className="lg:col-span-2 space-y-6">
           {/* Current Session Status */}
           <Card
+            className={session ? 'tc-aurora-hairline' : ''}
             title={es.cashSession.status}
             subtitle={session ? es.cash.opened : es.cashSession.isClosed}
             actions={
               session ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                  <span className="tc-live-dot" aria-hidden="true" />
                   <Unlock size={14} />
                   {es.cashSession.isOpen}
                 </span>
@@ -440,7 +442,7 @@ export default function CashRegisterPage(): JSX.Element {
                     <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Inicial</p>
                     <p className="text-xl font-bold text-gray-900">{formatCurrency(session.initialCash)}</p>
                   </div>
-                  <div className="bg-blue-50 rounded-xl p-4">
+                  <div className="tc-aurora-tile rounded-xl p-4">
                     <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Efectivo esperado</p>
                     <p className="text-xl font-bold text-blue-700">{formatCurrency(expectedCash)}</p>
                   </div>
@@ -524,7 +526,7 @@ export default function CashRegisterPage(): JSX.Element {
                     <button
                       type="button"
                       onClick={() => setShowAddExpense(true)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
+                      className="tc-aurora-hover inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
                     >
                       <Plus size={14} />
                       Registrar egreso
@@ -557,7 +559,7 @@ export default function CashRegisterPage(): JSX.Element {
                           id="expense-concept"
                           value={expenseConcept}
                           onChange={(e) => setExpenseConcept(e.target.value as ExpenseConcept | '')}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white tc-aurora-field"
                         >
                           <option value="">Selecciona un concepto…</option>
                           {EXPENSE_CONCEPTS.map((concept) => (
@@ -577,7 +579,7 @@ export default function CashRegisterPage(): JSX.Element {
                             value={expenseAmount}
                             onChange={(e) => setExpenseAmount(e.target.value)}
                             placeholder="0"
-                            className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                            className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm tc-aurora-field"
                           />
                         </div>
                       </div>
@@ -593,7 +595,7 @@ export default function CashRegisterPage(): JSX.Element {
                         maxLength={200}
                         onChange={(e) => setExpenseNote(e.target.value)}
                         placeholder={expenseConcept === 'Otro' ? 'Describe el egreso' : 'Ej.: factura de la luz'}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm tc-aurora-field"
                       />
                     </div>
                     {expenseError && <p role="alert" className="text-sm font-medium text-red-600">{expenseError}</p>}
@@ -622,7 +624,7 @@ export default function CashRegisterPage(): JSX.Element {
                         onChange={(e) => setFinalCash(e.target.value)}
                         placeholder="Efectivo contado"
                         aria-label="Efectivo contado"
-                        className="pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-44"
+                        className="pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm tc-aurora-field w-44"
                       />
                     </div>
                     <LoadingButton
@@ -650,7 +652,7 @@ export default function CashRegisterPage(): JSX.Element {
                       value={initialCash}
                       onChange={(e) => setInitialCash(e.target.value)}
                       placeholder={es.cashSession.openAmount}
-                      className="pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-40"
+                      className="pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm tc-aurora-field w-40"
                     />
                   </div>
                   <LoadingButton
@@ -689,7 +691,7 @@ export default function CashRegisterPage(): JSX.Element {
                 <button
                   type="button"
                   onClick={() => setShowAddExpense(true)}
-                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="tc-aurora-hover w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <Plus size={16} className="text-red-500" />
                   Registrar egreso
@@ -697,7 +699,7 @@ export default function CashRegisterPage(): JSX.Element {
                 <button
                   type="button"
                   onClick={() => setShowClosures(true)}
-                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="tc-aurora-hover w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <History size={16} className="text-indigo-500" />
                   Historial de cierres
@@ -722,7 +724,7 @@ export default function CashRegisterPage(): JSX.Element {
                   </div>
                 )}
                 {closures.slice(0, 5).map((c) => (
-                  <div key={c.id} className="flex items-center justify-between gap-2 p-2.5 bg-gray-50 rounded-lg">
+                  <div key={c.id} className="tc-soft-hover flex items-center justify-between gap-2 p-2.5 bg-gray-50 rounded-lg">
                     <div>
                       <p className="text-sm font-medium text-gray-800">{c.user.fullName}</p>
                       <p className="text-xs text-gray-400">{formatDateTime(c.closedAt)}</p>

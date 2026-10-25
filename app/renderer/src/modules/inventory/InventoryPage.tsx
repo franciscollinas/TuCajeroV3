@@ -438,7 +438,7 @@ export default function InventoryPage(): JSX.Element {
               type="button"
               onClick={() => handleExport('csv')}
               disabled={exporting}
-              className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors disabled:opacity-50"
+              className="tc-aurora-hover inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
               <Download size={16} />
               {exporting ? 'Exportando...' : 'CSV'}
@@ -447,7 +447,7 @@ export default function InventoryPage(): JSX.Element {
               type="button"
               onClick={() => handleExport('xlsx')}
               disabled={exporting}
-              className="inline-flex items-center gap-2 px-4 py-2.5 border border-blue-200 rounded-lg text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors disabled:opacity-50"
+              className="tc-aurora-hover inline-flex items-center gap-2 px-4 py-2.5 border border-blue-200 rounded-lg text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors disabled:opacity-50"
             >
               <FileSpreadsheet size={16} />
               {exporting ? 'Exportando...' : 'XLSX'}
@@ -457,7 +457,7 @@ export default function InventoryPage(): JSX.Element {
             type="button"
             onClick={handlePrintAllLabels}
             disabled={printingLabels || products.length === 0}
-            className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="tc-aurora-hover inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             <Printer size={16} />
             {printingLabels ? 'Generando...' : 'Etiquetas'}
@@ -465,7 +465,7 @@ export default function InventoryPage(): JSX.Element {
           <button
             type="button"
             onClick={() => navigate('/inventory/import')}
-            className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+            className="tc-aurora-hover inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
           >
             <Upload size={16} />
             {es.inventory.bulkImport}

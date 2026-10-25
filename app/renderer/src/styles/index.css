@@ -291,9 +291,15 @@ body {
 }
 .tc-table tbody tr { transition: background var(--transition-fast); position: relative; }
 .tc-table tbody tr:last-child td { border-bottom: none; }
-.tc-table tbody tr:hover td { background: var(--brand-50); box-shadow: inset 3px 0 0 var(--primary); }
+.tc-table tbody tr:hover td { background: rgba(134, 173, 255, 0.09); }
+.tc-table tbody td:first-child { position: relative; }
+.tc-table tbody tr:hover td:first-child::before,
+.tc-table tr.tc-row-selected td:first-child::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: linear-gradient(180deg, var(--aurora-blue), var(--aurora-violet), var(--aurora-aqua));
+}
 .tc-table tr.tc-row-error td { background: #fef3f2; }
-.tc-table tr.tc-row-selected td { background: var(--brand-50); box-shadow: inset 3px 0 0 var(--primary); }
+.tc-table tr.tc-row-selected td { background: rgba(134, 173, 255, 0.15); }
 
 /* ─── Cards ─── */
 .tc-card {
@@ -458,7 +464,9 @@ body {
 }
 
 /* ─── Campos: el borde se vuelve aurora y resplandece al escribir ─── */
-.tc-input:focus {
+.tc-input:focus,
+.tc-aurora-field:focus {
+  outline: none;
   border-color: transparent !important;
   background: linear-gradient(#fff, #fff) padding-box, var(--aurora-gradient) border-box !important;
   box-shadow: var(--glow-focus) !important;
@@ -544,6 +552,27 @@ body {
 /* ─── Foco de teclado: se conserva el contorno (contraste) y se le suma el resplandor ─── */
 button:focus-visible, a:focus-visible, [role='button']:focus-visible {
   filter: drop-shadow(0 0 7px rgba(134, 173, 255, 0.6));
+}
+
+/* ─── Caja abierta: punto que late, casilla del efectivo y filas de lista ─── */
+.tc-live-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: var(--aurora-gradient); background-size: 200% 100%;
+  box-shadow: 0 0 0 0 rgba(123, 230, 210, 0.55);
+  animation: aurora-shift 4s linear infinite, tc-live-pulse 2.4s ease-out infinite;
+}
+@keyframes tc-live-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(123, 230, 210, 0.55); }
+  70%, 100% { box-shadow: 0 0 0 7px rgba(123, 230, 210, 0); }
+}
+.tc-aurora-tile {
+  background: linear-gradient(135deg, rgba(134, 173, 255, 0.16), rgba(187, 156, 255, 0.12) 55%, rgba(123, 230, 210, 0.16));
+  border: 1px solid rgba(134, 173, 255, 0.35);
+}
+.tc-soft-hover { transition: background var(--transition-fast), box-shadow var(--transition-fast); }
+.tc-soft-hover:hover {
+  background: linear-gradient(90deg, rgba(134, 173, 255, 0.12), rgba(123, 230, 210, 0.09)) !important;
+  box-shadow: 0 0 0 1px rgba(134, 173, 255, 0.28);
 }
 
 /* ─── Indicador de carga ─── */
