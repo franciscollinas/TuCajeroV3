@@ -23,6 +23,13 @@ const isDev = !app.isPackaged;
 const AUTO_CLOSE_INACTIVITY_HOURS = 3;
 const AUTO_CLOSE_SWEEP_MS = 5 * 60 * 1000;
 
+// Dos copias abiertas a la vez escribirían sobre la misma base de datos. Solo en la app instalada:
+// en desarrollo se pueden abrir varias para probar.
+const gotSingleInstanceLock = isDev || app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
 let mainWindow: BrowserWindow | null = null;
 let autoCloseTimer: NodeJS.Timeout | null = null;
 
@@ -144,7 +151,20 @@ function startAutoCloseSweeper(): void {
   autoCloseTimer.unref();
 }
 
+app.on('second-instance', () => {
+  // Si abren la app otra vez, se trae al frente la ventana que ya existe.
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.error({ reason }, 'Promesa rechazada sin manejar');
+});
+
 app.whenReady().then(async () => {
+  if (!gotSingleInstanceLock) return;
   try {
     // Initialize database on startup
     getDatabase();

@@ -2,6 +2,7 @@ import pino from 'pino';
 import path from 'path';
 import fs from 'fs';
 import { app } from 'electron';
+import { rotateLogIfNeeded } from './log-rotation';
 
 const isDev = !app.isPackaged;
 
@@ -20,6 +21,7 @@ function getLogger(): pino.Logger {
   const logDir = path.join(app.getPath('userData'), 'logs');
   fs.mkdirSync(logDir, { recursive: true });
   const logFile = path.join(logDir, 'app.log');
+  rotateLogIfNeeded(logFile);
 
   return pino(
     {
