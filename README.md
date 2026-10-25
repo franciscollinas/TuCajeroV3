@@ -54,15 +54,17 @@ npm test
 sistema los tests de servicio se saltan. Para ejecutarlos completos (el ABI de
 Electron coincide):
 
-```powershell
-$env:ELECTRON_RUN_AS_NODE="1"
-npx vitest run
+```bash
+npm run test:full        # todas las pruebas, también en Windows/PowerShell
 ```
+
+En GitHub (CI) `npm test` ya ejecuta todas, porque allí `better-sqlite3` se
+compila para Node. El test de estrés masivo queda aparte: `npm run test:stress`.
 
 ## Verificación
 
 ```bash
-npm run typecheck        # proyecto completo
+npm run typecheck        # interfaz y proceso principal
 npm run typecheck:main   # solo proceso principal
 npm run lint
 ```
@@ -75,7 +77,7 @@ de la base**, nunca sobre la de uso real:
 
 ```bash
 # 1. copia la base (con catálogo y, si quieres usar la app, con licencia activa)
-copy database	ucajero.db copia-demo.db          # PowerShell / cmd
+copy database\tucajero.db copia-demo.db          # PowerShell / cmd
 # 2. agrega 42 días de historial
 npm run db:seed-demo -- --db copia-demo.db
 # 3. abre la app apuntando a la copia
