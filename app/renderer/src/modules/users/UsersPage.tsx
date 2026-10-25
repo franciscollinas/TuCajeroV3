@@ -60,7 +60,7 @@ export default function UsersPage(): JSX.Element {
     const fetchUsers = async () => {
       if (!user) return;
       try {
-        const data = await trpc.users.list.query({ userId: user.id });
+        const data = await trpc.users.list.query();
         if (!cancelled) setUsers(data as UserRecord[]);
       } catch (err) {
         rendererLogger.error('UsersPage', 'Error fetching users:', err);
