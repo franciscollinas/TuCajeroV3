@@ -5,6 +5,7 @@ import { es } from '../../shared/i18n';
 import { Card } from '../../shared/components/Card';
 import { LoadingButton } from '../../shared/components/LoadingButton';
 import { LoadingSpinner } from '../../shared/components/LoadingSpinner';
+import { useConfig } from '../../shared/context/ConfigContext';
 
 interface BusinessInfo {
   businessName: string;
@@ -26,6 +27,7 @@ export default function SettingsPage(): JSX.Element {
     logo: '',
     ivaEnabled: false,
   });
+  const { refresh: refreshBusiness } = useConfig();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -64,6 +66,7 @@ export default function SettingsPage(): JSX.Element {
     setMessage('');
     try {
       await trpc.config.setBusiness.mutate({ config: form });
+      await refreshBusiness(); // el encabezado (nombre, datos y logo) se actualiza al instante
       setMessageType('success');
       setMessage('Datos del negocio guardados correctamente.');
     } catch (err) {
@@ -203,8 +206,11 @@ export default function SettingsPage(): JSX.Element {
                 value={form.logo}
                 onChange={(e) => setForm((prev) => ({ ...prev, logo: e.target.value }))}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                placeholder="ruta/al/logo.png"
+                placeholder="https://… o C:\Users\…\logo.png"
               />
+              <p className="mt-1.5 text-xs text-gray-500">
+                Se muestra arriba, junto al nombre del negocio. Una imagen guardada en el equipo funciona sin internet; si no carga, se ve la inicial del negocio.
+              </p>
             </div>
           </div>
 
