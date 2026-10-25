@@ -27,6 +27,7 @@ import { LicenseService } from '../services/license.service';
 import { PrinterService } from '../services/printer.service';
 import { DianService } from '../services/dian.service';
 import { roundMoney } from '../utils/money';
+import pkg from '../../../package.json';
 
 
 const authService = new AuthService();
@@ -124,7 +125,7 @@ export const authRouter = t.router({
 });
 
 export const healthRouter = t.router({
-  check: t.procedure.query(() => ({ status: 'ok', version: '3.0.0', mode: 'local' })),
+  check: t.procedure.query(() => ({ status: 'ok', version: pkg.version, mode: 'local' })),
 });
 
 export const inventoryRouter = t.router({

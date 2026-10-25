@@ -4,7 +4,7 @@ import { X, Info, Award } from 'lucide-react';
 interface AboutModalProps { open: boolean; onClose: () => void; }
 
 export const AboutModal = memo(function AboutModal({ open, onClose }: AboutModalProps): JSX.Element | null {
-  const [version, setVersion] = useState('3.0.0');
+  const [version, setVersion] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -32,7 +32,7 @@ export const AboutModal = memo(function AboutModal({ open, onClose }: AboutModal
           </div>
           <h2 className="text-2xl font-extrabold m-0">TuCajero</h2>
           <p className="text-sm opacity-85 mt-1">Sistema Punto de Venta para Pequeños Negocios</p>
-          <p className="text-xs opacity-70 mt-0.5">Versión {version}</p>
+          <p className="text-xs opacity-70 mt-0.5">{version ? `Versión ${version}` : '\u00a0'}</p>
         </div>
         <div className="p-6">
           <div className="bg-gray-50 rounded-lg p-4 mb-5 border border-gray-200 text-center">
