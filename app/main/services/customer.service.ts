@@ -296,9 +296,24 @@ export class CustomerService {
       throw new AppError(ErrorCode.FORBIDDEN, 'La sesión de caja no pertenece a tu cuenta.');
     }
 
-    const newBalance = debt.balance - amount;
+    let newBalance = debt.balance - amount;
 
     await db.transaction((tx) => {
+      // Se vuelve a leer la deuda dentro de la transacción: dos abonos a la vez no
+      // pueden contarse los dos ni sumar el efectivo dos veces.
+      const fresh = tx
+        .select({ balance: schema.debts.balance, status: schema.debts.status })
+        .from(schema.debts)
+        .where(eq(schema.debts.id, debtId))
+        .get();
+      if (!fresh || fresh.status !== 'PENDING') {
+        throw new AppError(ErrorCode.VALIDATION, 'La deuda ya está pagada.');
+      }
+      if (amount > fresh.balance) {
+        throw new AppError(ErrorCode.VALIDATION, 'El monto del pago excede el saldo de la deuda.');
+      }
+      newBalance = fresh.balance - amount;
+
       tx.update(schema.debts)
         .set({
           balance: Math.max(0, newBalance),
