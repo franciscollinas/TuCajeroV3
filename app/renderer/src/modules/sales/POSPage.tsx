@@ -49,24 +49,15 @@ const ProductCard = memo(function ProductCard({
       onClick={() => !outOfStock && onAdd(product)}
       onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !outOfStock) { e.preventDefault(); onAdd(product); } }}
       aria-label={`${product.name}, ${formatCurrency(product.price)}, ${outOfStock ? 'Sin stock' : `Stock: ${product.stock}`}`}
-      className="tc-card animate-slideUp"
+      className="tc-card tc-glow-hover animate-slideUp"
+      aria-disabled={outOfStock}
       style={{
         cursor: outOfStock ? 'not-allowed' : 'pointer',
         opacity: outOfStock ? 0.55 : 1,
         padding: 0,
         border: '2px solid transparent',
-        transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
-        position: 'relative',
+                position: 'relative',
         overflow: 'hidden',
-      }}
-      onMouseEnter={(e) => {
-        if (outOfStock) return;
-        e.currentTarget.style.borderColor = 'var(--brand-300)';
-        e.currentTarget.style.boxShadow = 'var(--shadow-lg)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = 'transparent';
-        e.currentTarget.style.boxShadow = 'var(--shadow-card)';
       }}
     >
       {outOfStock && (
@@ -743,7 +734,7 @@ export function POSPage(): JSX.Element {
 
         {/* === RIGHT COLUMN - Cart === */}
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
-          <div className="tc-card" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', height: 'auto', border: '2px solid var(--brand-100)', boxShadow: 'var(--shadow-xl)', padding: 0, animation: 'slideInRight 0.4s ease' }}>
+          <div className="tc-card tc-aurora-hairline" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', height: 'auto', border: '2px solid var(--brand-100)', boxShadow: 'var(--shadow-xl)', padding: 0, animation: 'slideInRight 0.4s ease' }}>
             {/* Cart Header */}
             <div style={{ padding: 'var(--space-4)', background: 'linear-gradient(135deg, var(--brand-600) 0%, var(--brand-500) 100%)', borderBottom: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 8px rgba(54, 65, 245, 0.2)' }}>
               <h3 style={{ margin: 0, fontWeight: 800, fontSize: 'var(--text-lg)', color: '#fff', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
@@ -898,6 +889,7 @@ export function POSPage(): JSX.Element {
                 onClick={openCheckout}
                 disabled={cart.length === 0 || showCheckoutModal}
                 aria-label={`Cobrar ${formatCurrency(total)}`}
+                className="tc-aurora-hover"
                 style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-3)', padding: 'var(--space-4)', borderRadius: 'var(--radius-xl)', background: cart.length > 0 && !showCheckoutModal ? 'linear-gradient(135deg, var(--success-600) 0%, var(--success-500) 100%)' : 'var(--gray-300)', border: 'none', color: '#fff', fontWeight: 800, fontSize: 'var(--text-lg)', cursor: cart.length === 0 || showCheckoutModal ? 'not-allowed' : 'pointer', opacity: cart.length === 0 || showCheckoutModal ? 0.5 : 1, transition: 'all var(--transition-fast)', boxShadow: cart.length > 0 && !showCheckoutModal ? '0 4px 16px rgba(18, 183, 106, 0.5)' : 'none', marginBottom: 'var(--space-2)', minHeight: '56px' }}
               >
                 <Banknote size={24} />
@@ -917,9 +909,9 @@ export function POSPage(): JSX.Element {
 
       {/* CHECKOUT MODAL */}
       {showCheckoutModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0, 0, 0, 0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
+        <div className="tc-overlay-glass" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
           onClick={(e) => { if (e.target === e.currentTarget && !loading) closeCheckout(); }}>
-          <div role="dialog" aria-modal="true" aria-label="Cobro" style={{ background: 'var(--gray-50)', borderRadius: 'var(--radius-2xl)', width: '95vw', maxWidth: '900px', maxHeight: '90vh', overflow: 'auto', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
+          <div role="dialog" aria-modal="true" aria-label="Cobro" className="tc-aurora-frame" style={{ background: 'var(--gray-50)', borderRadius: 'var(--radius-2xl)', width: '95vw', maxWidth: '900px', maxHeight: '90vh', overflow: 'auto', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
             {/* Modal Header */}
             <div style={{ padding: 'var(--space-4)', background: 'linear-gradient(135deg, var(--brand-600) 0%, var(--brand-500) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h2 style={{ margin: 0, fontWeight: 800, fontSize: 'var(--text-xl)', color: '#fff', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>

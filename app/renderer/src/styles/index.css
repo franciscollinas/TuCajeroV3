@@ -424,6 +424,137 @@ body {
   .pos-checkout-grid { grid-template-columns: 1fr !important; }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   AURORA — brillo suave estilo Gemini para modo claro
+   El fondo sigue siendo blanco. El color solo aparece donde está tu atención:
+   el campo que escribes, el botón al que apuntas y el contenedor donde trabajas.
+   Clases para usar en los componentes:
+     .tc-aurora-frame    contenedor clave (modales, login): borde degradado + halo
+     .tc-aurora-hairline contenedor fijo (carrito): solo borde degradado fino
+     .tc-glow-hover      tarjeta interactiva: se eleva y se rodea de halo al apuntarla
+     .tc-aurora-hover    cualquier botón con estilo propio: halo + anillo animado al apuntarlo
+     .tc-overlay-glass   fondo de modales: vidrio claro con tinte aurora
+   Los campos (.tc-input) y los botones (.tc-btn-*) lo reciben solos.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  --aurora-blue: #86adff;
+  --aurora-violet: #bb9cff;
+  --aurora-aqua: #7be6d2;
+  --aurora-gradient: linear-gradient(115deg, var(--aurora-blue) 0%, var(--aurora-violet) 38%, var(--aurora-aqua) 70%, var(--aurora-blue) 100%);
+  --aurora-wash:
+    radial-gradient(60% 80% at 12% 0%, rgba(134, 173, 255, 0.24), transparent 70%),
+    radial-gradient(50% 70% at 92% 8%, rgba(187, 156, 255, 0.20), transparent 70%),
+    radial-gradient(60% 80% at 60% 100%, rgba(123, 230, 210, 0.18), transparent 70%);
+  --glow-focus: 0 0 0 3px rgba(134, 173, 255, 0.20), 0 0 18px 1px rgba(187, 156, 255, 0.32), 0 0 34px 2px rgba(123, 230, 210, 0.16);
+  --glow-hover: 0 10px 28px -8px rgba(134, 173, 255, 0.45), 0 0 24px -4px rgba(187, 156, 255, 0.30);
+  --glow-btn: 0 6px 20px -4px rgba(134, 173, 255, 0.55), 0 0 22px -2px rgba(187, 156, 255, 0.45), 0 2px 26px -2px rgba(123, 230, 210, 0.35);
+  --glow-frame: 0 0 0 1px rgba(255, 255, 255, 0.8), 0 18px 44px -14px rgba(134, 173, 255, 0.50), 0 0 52px -10px rgba(187, 156, 255, 0.32);
+}
+
+/* El degradado empieza y termina en el mismo color: al mover 200 % el bucle no se nota. */
+@keyframes aurora-shift {
+  from { background-position: 0% 50%; }
+  to { background-position: 200% 50%; }
+}
+
+/* ─── Campos: el borde se vuelve aurora y resplandece al escribir ─── */
+.tc-input:focus {
+  border-color: transparent !important;
+  background: linear-gradient(#fff, #fff) padding-box, var(--aurora-gradient) border-box !important;
+  box-shadow: var(--glow-focus) !important;
+}
+
+/* ─── Botones: halo difuso + anillo degradado que se anima al apuntarlos ─── */
+.tc-btn-primary,
+.tc-btn-success,
+.tc-btn-secondary,
+.tc-aurora-hover { position: relative; isolation: isolate; }
+
+.tc-btn-primary::after,
+.tc-btn-success::after,
+.tc-btn-secondary::after,
+.tc-aurora-hover::after {
+  content: ''; position: absolute; inset: -2px; padding: 2px; border-radius: inherit;
+  background: var(--aurora-gradient); background-size: 200% 100%;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  opacity: 0; transition: opacity var(--transition-normal); pointer-events: none;
+}
+/* Halo de color por fuera del botón (una sombra sobre su propia cara lo teñiría). */
+.tc-btn-primary:hover:not(:disabled),
+.tc-btn-success:hover:not(:disabled),
+.tc-aurora-hover:hover:not(:disabled),
+.tc-btn-primary:focus-visible,
+.tc-btn-success:focus-visible,
+.tc-aurora-hover:focus-visible { box-shadow: var(--glow-btn) !important; }
+.tc-btn-primary:hover:not(:disabled)::after,
+.tc-btn-success:hover:not(:disabled)::after,
+.tc-btn-secondary:hover:not(:disabled)::after,
+.tc-aurora-hover:hover:not(:disabled)::after,
+.tc-btn-primary:focus-visible::after,
+.tc-btn-success:focus-visible::after,
+.tc-btn-secondary:focus-visible::after,
+.tc-aurora-hover:focus-visible::after { opacity: 1; animation: aurora-shift 4s linear infinite; }
+
+/* Cargando: el halo y el anillo se quedan encendidos y se mueven (LoadingButton agrega .is-loading). */
+.tc-btn.is-loading::after { opacity: 1; animation: aurora-shift 2.4s linear infinite; }
+.tc-btn.is-loading { box-shadow: var(--glow-btn); }
+
+/* ─── Contenedores clave ─── */
+.tc-aurora-frame {
+  border: 1.5px solid transparent !important;
+  background: linear-gradient(#fff, #fff) padding-box, var(--aurora-gradient) border-box !important;
+  box-shadow: var(--glow-frame) !important;
+}
+.tc-aurora-hairline {
+  border: 1.5px solid transparent !important;
+  background: linear-gradient(#fff, #fff) padding-box, var(--aurora-gradient) border-box !important;
+  box-shadow: 0 10px 30px -14px rgba(134, 173, 255, 0.45) !important;
+}
+
+/* Fondo de los modales: vidrio claro con tinte aurora (antes era gris oscuro). */
+.tc-overlay-glass {
+  background: var(--aurora-wash), rgba(244, 246, 255, 0.62);
+  -webkit-backdrop-filter: blur(12px) saturate(1.15); backdrop-filter: blur(12px) saturate(1.15);
+}
+
+/* ─── Tarjetas interactivas: elevación ligera + halo ─── */
+.tc-glow-hover { transition: transform var(--transition-normal), box-shadow var(--transition-normal); }
+.tc-glow-hover:hover:not([aria-disabled='true']),
+.tc-card--interactive:hover {
+  transform: translateY(-2px);
+  border-color: transparent !important;
+  background: linear-gradient(#fff, #fff) padding-box, var(--aurora-gradient) border-box !important;
+  box-shadow: var(--glow-hover) !important;
+}
+.tc-metric:hover { box-shadow: var(--glow-hover); }
+
+/* ─── Estado activo del menú y borde de la barra superior ─── */
+.tc-nav-item-active {
+  background: linear-gradient(90deg, var(--brand-50), rgba(123, 230, 210, 0.12));
+  box-shadow: 0 0 20px -8px rgba(134, 173, 255, 0.65);
+}
+.tc-nav-item::before { background: linear-gradient(180deg, var(--aurora-blue), var(--aurora-violet), var(--aurora-aqua)); }
+.tc-header { position: relative; }
+.tc-header::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+  background: var(--aurora-gradient); opacity: 0.45; pointer-events: none;
+}
+
+/* ─── Foco de teclado: se conserva el contorno (contraste) y se le suma el resplandor ─── */
+button:focus-visible, a:focus-visible, [role='button']:focus-visible {
+  filter: drop-shadow(0 0 7px rgba(134, 173, 255, 0.6));
+}
+
+/* ─── Indicador de carga ─── */
+.tc-aurora-spinner {
+  display: inline-block; border-radius: 50%;
+  background: conic-gradient(from 0deg, rgba(134, 173, 255, 0) 0%, var(--aurora-blue) 35%, var(--aurora-violet) 65%, var(--aurora-aqua) 100%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  filter: drop-shadow(0 0 6px rgba(187, 156, 255, 0.55));
+}
+
 /* ─── Reduced motion ─── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

@@ -18,7 +18,7 @@ const variantClasses = {
 export function LoadingButton({ loading, variant = 'primary', size = 'md', children, className = '', disabled, ...props }: LoadingButtonProps): JSX.Element {
   const sizeClass = size === 'sm' ? 'tc-btn-sm' : '';
   return (
-    <button className={`tc-btn ${sizeClass} ${variantClasses[variant]} ${className}`} disabled={disabled || loading} {...props}>
+    <button className={`tc-btn ${sizeClass} ${variantClasses[variant]} ${loading ? 'is-loading' : ''} ${className}`} disabled={disabled || loading} aria-busy={loading || undefined} {...props}>
       {loading && <Loader2 size={size === 'sm' ? 14 : 16} className="animate-spin" />}
       {children}
     </button>
