@@ -324,6 +324,20 @@ export class SalesService {
               .run();
           }
 
+          auditService.logInTransaction(tx, {
+            userId,
+            accountId,
+            action: 'sale:created',
+            entity: 'Sale',
+            entityId: created.id,
+            payload: {
+              saleNumber: created.saleNumber,
+              total: Number(created.total),
+              items: items.length,
+              payments: effectivePayments.map((p) => ({ method: p.method, amount: p.amount })),
+            },
+          });
+
           return created;
         });
         break;
@@ -340,19 +354,6 @@ export class SalesService {
     if (!createdSale) {
       throw new AppError(ErrorCode.VALIDATION, 'Error al crear la venta.');
     }
-
-    await auditService.log({
-      userId,
-      action: 'sale:created',
-      entity: 'Sale',
-      entityId: createdSale.id,
-      payload: {
-        saleNumber: createdSale.saleNumber,
-        total: Number(createdSale.total),
-        items: items.length,
-        payments: effectivePayments.map((p) => ({ method: p.method, amount: p.amount })),
-      },
-    });
 
     const fullSale = await this.getSaleById(createdSale.id, accountId);
     if (!fullSale) {
@@ -815,14 +816,15 @@ export class SalesService {
           .where(and(eq(schema.payments.saleId, id), eq(schema.payments.method, 'credito')))
           .run();
       }
-    });
 
-    await auditService.log({
-      userId,
-      action: 'sale:cancelled',
-      entity: 'Sale',
-      entityId: sale.id,
-      payload: { saleNumber: sale.saleNumber, total: sale.total },
+      auditService.logInTransaction(tx, {
+        userId,
+        accountId,
+        action: 'sale:cancelled',
+        entity: 'Sale',
+        entityId: sale.id,
+        payload: { saleNumber: sale.saleNumber, total: sale.total },
+      });
     });
 
     return { success: true };
