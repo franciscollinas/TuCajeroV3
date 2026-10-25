@@ -19,6 +19,7 @@
     "lint": "eslint . --ext .ts,.tsx --max-warnings 0",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "test": "vitest run",
+    "test:full": "node scripts/run-with-electron.cjs node_modules/vitest/vitest.mjs run",
     "test:watch": "vitest",
     "test:stress": "vitest run --config vitest.stress.config.ts",
     "db:generate": "drizzle-kit generate",
@@ -28,7 +29,7 @@
     "db:backfill": "npx tsx app/main/scripts/backfill-accounts.ts",
     "db:studio": "drizzle-kit studio",
     "clean": "rimraf dist release",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.main.json --noEmit",
     "typecheck:main": "tsc -p tsconfig.main.json --noEmit"
   },
   "dependencies": {
