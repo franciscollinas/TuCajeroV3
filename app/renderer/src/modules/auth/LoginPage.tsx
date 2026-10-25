@@ -5,6 +5,7 @@ import { User, Lock, Check, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../shared/context/AuthContext';
 import { es } from '../../shared/i18n';
 import { GrainOverlay } from '../../shared/components/GrainOverlay';
+import { LOGO_URL } from '../../shared/utils/assets';
 
 export function LoginPage(): JSX.Element {
   const { login } = useAuth();
@@ -69,7 +70,7 @@ export function LoginPage(): JSX.Element {
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <img
-            src="/isotipo.png"
+            src={LOGO_URL}
             alt=""
             width={84}
             height={84}

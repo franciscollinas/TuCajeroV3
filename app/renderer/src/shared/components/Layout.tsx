@@ -12,6 +12,7 @@ import { es } from '../i18n';
 import { AboutModal } from './AboutModal';
 import { GrainOverlay } from './GrainOverlay';
 import { UpdateBanner } from './UpdateBanner';
+import { LOGO_URL } from '../utils/assets';
 
 interface LayoutProps { children: ReactNode; }
 
@@ -83,7 +84,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
       <aside className="tc-sidebar" role="navigation" aria-label="Navegación principal">
         <div className="tc-sidebar-header" style={{ justifyContent: isCollapsed ? 'center' : 'flex-start' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-            <img src="/isotipo.png" alt="TuCajero" style={{ width: 32, height: 32, flexShrink: 0 }} />
+            <img src={LOGO_URL} alt="TuCajero" style={{ width: 32, height: 32, flexShrink: 0 }} />
             {!isCollapsed && <span className="tc-logo-text"><span className="tc-logo-accent">Tu</span>Cajero</span>}
           </div>
         </div>
