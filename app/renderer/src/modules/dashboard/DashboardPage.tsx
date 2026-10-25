@@ -22,6 +22,7 @@ import { Card } from '../../shared/components/Card';
 import { StatusBadge } from '../../shared/components/StatusBadge';
 import { LoadingSpinner } from '../../shared/components/LoadingSpinner';
 import { EmptyState } from '../../shared/components/EmptyState';
+import { LoadError } from '../../shared/components/LoadError';
 import type { DashboardSummary } from '../../shared/types/sales.types';
 
 // Se descarga solo al mostrar el gráfico (recharts pesa bastante).
@@ -44,6 +45,7 @@ export default function DashboardPage(): JSX.Element {
 
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [cashLoading, setCashLoading] = useState(false);
   const [initialCash, setInitialCash] = useState('');
   const [finalCash, setFinalCash] = useState('');
@@ -70,8 +72,10 @@ export default function DashboardPage(): JSX.Element {
         fetchAlerts(branchId),
       ]);
       setSummary(summaryData as DashboardSummary);
+      setLoadError(null);
     } catch (err) {
       rendererLogger.error('DashboardPage', 'Error fetching dashboard data:', err);
+      setLoadError(err instanceof Error ? err.message : 'Error desconocido.');
     } finally {
       setLoading(false);
     }
@@ -150,6 +154,11 @@ export default function DashboardPage(): JSX.Element {
     );
   }
 
+  // Sin datos previos no hay nada que mostrar: se avisa en vez de enseñar ceros que parecen reales.
+  if (loadError && !summary) {
+    return <LoadError what="el inicio" detail={loadError} onRetry={() => { setLoading(true); void fetchData(); }} />;
+  }
+
   const today = new Date();
   const dateStr = today.toLocaleDateString('es-CO', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
@@ -160,6 +169,12 @@ export default function DashboardPage(): JSX.Element {
   return (
     <div className="space-y-6">
       {closeDialog}
+      {loadError && summary && (
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span>No se pudo actualizar. Se muestran los últimos datos cargados.</span>
+          <button type="button" onClick={() => void fetchData()} className="font-semibold underline">Reintentar</button>
+        </div>
+      )}
       {/* ── Welcome Header ── */}
       <div className="relative overflow-hidden rounded-2xl p-6 text-white" style={{ background: 'linear-gradient(135deg, #3641f5, #2a31d8, #1e24b5)' }}>
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-32 translate-x-32 pointer-events-none" />
