@@ -216,7 +216,7 @@ body {
 
 .tc-content { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; z-index: 1; }
 .tc-header {
-  background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.96);
   border-bottom: 1px solid var(--gray-200); height: 70px;
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 var(--space-6); gap: var(--space-4); flex-shrink: 0; box-shadow: 0 1px 0 rgba(16, 24, 40, 0.02);
@@ -516,7 +516,12 @@ body {
 .tc-btn-primary:focus-visible::after,
 .tc-btn-success:focus-visible::after,
 .tc-btn-secondary:focus-visible::after,
-.tc-aurora-hover:focus-visible::after { opacity: 1; animation: aurora-shift 4s linear infinite; }
+.tc-aurora-hover:focus-visible::after { opacity: 1; }
+/* El anillo se mueve un par de vueltas y se detiene: una animación sin fin repintaría sin parar mientras el cursor descansa sobre el botón. */
+.tc-btn-primary:hover:not(:disabled)::after,
+.tc-btn-success:hover:not(:disabled)::after,
+.tc-btn-secondary:hover:not(:disabled)::after,
+.tc-aurora-hover:hover:not(:disabled)::after { animation: aurora-shift 4s linear 2; }
 
 /* Cargando: el halo y el anillo se quedan encendidos y se mueven (LoadingButton agrega .is-loading). */
 .tc-btn.is-loading::after { opacity: 1; animation: aurora-shift 2.4s linear infinite; }
@@ -536,8 +541,7 @@ body {
 
 /* Fondo de los modales: vidrio claro con tinte aurora (antes era gris oscuro). */
 .tc-overlay-glass {
-  background: var(--aurora-wash), rgba(244, 246, 255, 0.62);
-  -webkit-backdrop-filter: blur(12px) saturate(1.15); backdrop-filter: blur(12px) saturate(1.15);
+  background: var(--aurora-wash), rgba(244, 246, 255, 0.80);
 }
 
 /* ─── Tarjetas interactivas: elevación ligera + halo ─── */
@@ -570,14 +574,18 @@ button:focus-visible, a:focus-visible, [role='button']:focus-visible {
 
 /* ─── Caja abierta: punto que late, casilla del efectivo y filas de lista ─── */
 .tc-live-dot {
-  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
-  background: var(--aurora-gradient); background-size: 200% 100%;
-  box-shadow: 0 0 0 0 rgba(123, 230, 210, 0.55);
-  animation: aurora-shift 4s linear infinite, tc-live-pulse 2.4s ease-out infinite;
+  position: relative; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: var(--aurora-gradient);
+}
+/* Solo transform y opacity: se resuelve en la tarjeta gráfica sin repintar (importa en equipos modestos). */
+.tc-live-dot::after {
+  content: ''; position: absolute; inset: 0; border-radius: 50%;
+  background: rgba(123, 230, 210, 0.55);
+  animation: tc-live-pulse 2.4s ease-out infinite; will-change: transform, opacity;
 }
 @keyframes tc-live-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(123, 230, 210, 0.55); }
-  70%, 100% { box-shadow: 0 0 0 7px rgba(123, 230, 210, 0); }
+  0% { transform: scale(1); opacity: 0.7; }
+  70%, 100% { transform: scale(2.8); opacity: 0; }
 }
 .tc-aurora-tile {
   background: linear-gradient(135deg, rgba(134, 173, 255, 0.16), rgba(187, 156, 255, 0.12) 55%, rgba(123, 230, 210, 0.16));
