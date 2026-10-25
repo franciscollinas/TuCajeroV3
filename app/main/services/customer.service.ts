@@ -163,39 +163,38 @@ export class CustomerService {
       .orderBy(desc(schema.sales.createdAt))
       .limit(50);
 
+    // El número de venta de cada deuda sale en la misma consulta (antes, una consulta por deuda).
     const debtRows = await db
-      .select()
+      .select({
+        id: schema.debts.id,
+        customerId: schema.debts.customerId,
+        saleId: schema.debts.saleId,
+        amount: schema.debts.amount,
+        balance: schema.debts.balance,
+        status: schema.debts.status,
+        createdAt: schema.debts.createdAt,
+        updatedAt: schema.debts.updatedAt,
+        saleNumber: schema.sales.saleNumber,
+      })
       .from(schema.debts)
+      .leftJoin(schema.sales, eq(schema.sales.id, schema.debts.saleId))
       .where(
         and(eq(schema.debts.customerId, customerId), eq(schema.debts.status, 'PENDING')),
       )
       .orderBy(desc(schema.debts.createdAt));
 
-    const debtWithSales = await Promise.all(
-      debtRows.map(async (debt) => {
-        let saleNumber: string | undefined;
-        if (debt.saleId) {
-          const [sale] = await db
-            .select({ saleNumber: schema.sales.saleNumber })
-            .from(schema.sales)
-            .where(eq(schema.sales.id, debt.saleId))
-            .limit(1);
-          saleNumber = sale?.saleNumber;
-        }
-        return {
-          id: debt.id,
-          customerId: debt.customerId,
-          saleId: debt.saleId,
-          amount: debt.amount,
-          balance: debt.balance,
-          status: debt.status,
-          createdAt: debt.createdAt,
-          updatedAt: debt.updatedAt,
-          saleNumber,
-          customerName: customer.name,
-        };
-      }),
-    );
+    const debtWithSales = debtRows.map((debt) => ({
+      id: debt.id,
+      customerId: debt.customerId,
+      saleId: debt.saleId,
+      amount: debt.amount,
+      balance: debt.balance,
+      status: debt.status,
+      createdAt: debt.createdAt,
+      updatedAt: debt.updatedAt,
+      saleNumber: debt.saleNumber ?? undefined,
+      customerName: customer.name,
+    }));
 
     return {
       customer: mapCustomer(customer),

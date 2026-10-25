@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, like } from 'drizzle-orm';
+import { eq, and, desc, asc, like, sql } from 'drizzle-orm';
 
 import { getDatabase, schema } from '../db';
 import { AppError, ErrorCode } from '../utils/errors';
@@ -493,37 +493,46 @@ export class PurchaseService {
   async getPurchaseSummary(accountId?: number | null): Promise<PurchaseSummary> {
     const db = getDatabase();
 
-    const orders = await db
-      .select()
+    // Una sola consulta agrupada por proveedor y estado (antes se traían todos los pedidos y se
+    // buscaba el proveedor de cada uno con una consulta aparte).
+    const groups = await db
+      .select({
+        supplierId: schema.purchaseOrders.supplierId,
+        supplierName: schema.suppliers.name,
+        status: schema.purchaseOrders.status,
+        orders: sql<number>`count(*)`.mapWith(Number),
+        total: sql<number>`coalesce(sum(${schema.purchaseOrders.total}), 0)`.mapWith(Number),
+        firstOrderId: sql<number>`min(${schema.purchaseOrders.id})`.mapWith(Number),
+      })
       .from(schema.purchaseOrders)
-      .where(accountId ? eq(schema.purchaseOrders.accountId, accountId) : undefined);
+      .leftJoin(schema.suppliers, eq(schema.suppliers.id, schema.purchaseOrders.supplierId))
+      .where(accountId ? eq(schema.purchaseOrders.accountId, accountId) : undefined)
+      .groupBy(schema.purchaseOrders.supplierId, schema.purchaseOrders.status);
 
-    const totalOrders = orders.length;
-    const totalValue = orders.reduce((sum, o) => sum + o.total, 0);
-    const pendingOrders = orders.filter(
-      (o) => o.status === 'DRAFT' || o.status === 'CONFIRMED' || o.status === 'SENT',
-    ).length;
-    const receivedOrders = orders.filter((o) => o.status === 'RECEIVED').length;
+    let totalOrders = 0;
+    let totalValue = 0;
+    let pendingOrders = 0;
+    let receivedOrders = 0;
+    const supplierMap = new Map<number, { supplierId: number; supplierName: string; orderCount: number; totalValue: number; firstOrderId: number }>();
 
-    const supplierMap = new Map<number, { supplierId: number; supplierName: string; orderCount: number; totalValue: number }>();
+    for (const g of groups) {
+      totalOrders += g.orders;
+      totalValue += g.total;
+      if (g.status === 'DRAFT' || g.status === 'CONFIRMED' || g.status === 'SENT') pendingOrders += g.orders;
+      if (g.status === 'RECEIVED') receivedOrders += g.orders;
 
-    for (const order of orders) {
-      const [supplier] = await db
-        .select({ name: schema.suppliers.name })
-        .from(schema.suppliers)
-        .where(eq(schema.suppliers.id, order.supplierId))
-        .limit(1);
-
-      const existing = supplierMap.get(order.supplierId);
+      const existing = supplierMap.get(g.supplierId);
       if (existing) {
-        existing.orderCount++;
-        existing.totalValue += order.total;
+        existing.orderCount += g.orders;
+        existing.totalValue += g.total;
+        existing.firstOrderId = Math.min(existing.firstOrderId, g.firstOrderId);
       } else {
-        supplierMap.set(order.supplierId, {
-          supplierId: order.supplierId,
-          supplierName: supplier?.name ?? 'Unknown',
-          orderCount: 1,
-          totalValue: order.total,
+        supplierMap.set(g.supplierId, {
+          supplierId: g.supplierId,
+          supplierName: g.supplierName ?? 'Unknown',
+          orderCount: g.orders,
+          totalValue: g.total,
+          firstOrderId: g.firstOrderId,
         });
       }
     }
@@ -533,7 +542,10 @@ export class PurchaseService {
       totalValue,
       pendingOrders,
       receivedOrders,
-      ordersBySupplier: Array.from(supplierMap.values()),
+      // Mismo orden de antes: por el primer pedido de cada proveedor.
+      ordersBySupplier: Array.from(supplierMap.values())
+        .sort((x, y) => x.firstOrderId - y.firstOrderId)
+        .map(({ supplierId, supplierName, orderCount, totalValue: value }) => ({ supplierId, supplierName, orderCount, totalValue: value })),
     };
   }
 }
