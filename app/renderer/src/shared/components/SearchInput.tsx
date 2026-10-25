@@ -13,7 +13,7 @@ export function SearchInput({ value, onChange, placeholder = es.common.search, c
     <div className={`relative flex items-center ${className}`}>
       <Search size={18} className="absolute left-3.5 text-gray-400 pointer-events-none" />
       <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="tc-input pl-10" />
+        className="tc-input" style={{ paddingLeft: 42 }} />
     </div>
   );
 }
