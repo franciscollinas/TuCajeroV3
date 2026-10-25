@@ -37,8 +37,10 @@ export interface CashClosureUser {
 
 export interface CashClosureRow {
   id: number;
-  /** true si la caja se cerró sola por inactividad: no tiene conteo ni diferencia. */
+  /** true si la caja se cerró sola por inactividad (aunque ya se haya conciliado). */
   autoClosed: boolean;
+  /** true si falta contar el efectivo: sin conteo ni diferencia hasta que alguien lo concilie. */
+  pendingReconciliation: boolean;
   initialCash: number;
   finalCash: number | null;
   expectedCash: number | null;

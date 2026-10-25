@@ -14,6 +14,7 @@ import { DataTable } from '../../shared/components/DataTable';
 import type { Column } from '../../shared/components/DataTable';
 import { StatusBadge } from '../../shared/components/StatusBadge';
 import { LoadError } from '../../shared/components/LoadError';
+import { Modal } from '../../shared/components/Modal';
 import { useCloseCash } from '../../shared/hooks/useCloseCash';
 import { EXPENSE_CONCEPTS, parseExpenseReason } from '../../shared/types/cash.types';
 import type {
@@ -69,7 +70,44 @@ export default function CashRegisterPage(): JSX.Element {
   const [showClosures, setShowClosures] = useState(false);
   const [exportingClosures, setExportingClosures] = useState(false);
 
+  const [reconcileTarget, setReconcileTarget] = useState<CashClosureRow | null>(null);
+  const [countedInput, setCountedInput] = useState('');
+  const [reconcileNote, setReconcileNote] = useState('');
+  const [reconciling, setReconciling] = useState(false);
+  const [reconcileError, setReconcileError] = useState<string | null>(null);
+
   const branchId = currentBranch?.id;
+  const canReconcile = user?.role === 'ADMIN' || user?.role === 'SUPERVISOR';
+  const pendingClosures = closures.filter((c) => c.pendingReconciliation);
+
+  const openReconcile = (row: CashClosureRow): void => {
+    setReconcileTarget(row);
+    setCountedInput('');
+    setReconcileNote('');
+    setReconcileError(null);
+  };
+
+  const handleReconcile = async (): Promise<void> => {
+    if (!reconcileTarget) return;
+    const counted = Math.round(Number(countedInput));
+    if (countedInput.trim() === '' || !Number.isFinite(counted) || counted < 0) {
+      setReconcileError('Escribe el efectivo que contaste (0 o más).');
+      return;
+    }
+    setReconciling(true);
+    setReconcileError(null);
+    try {
+      await trpc.cash.reconcile.mutate({ sessionId: reconcileTarget.id, countedCash: counted, note: reconcileNote.trim() || undefined });
+      setReconcileTarget(null);
+      const list = await trpc.cash.listClosures.query({ branchId });
+      setClosures(list as CashClosureRow[]);
+    } catch (err) {
+      rendererLogger.error('CashRegisterPage', 'Error reconciling closure:', err);
+      setReconcileError(err instanceof Error ? err.message : 'No se pudo conciliar el cierre.');
+    } finally {
+      setReconciling(false);
+    }
+  };
 
   // Datos de la sesión activa: resumen de la sesión, egresos, ventas del día y cierres.
   const loadSessionData = useCallback(
@@ -297,9 +335,11 @@ export default function CashRegisterPage(): JSX.Element {
     },
     {
       key: 'finalCash', header: 'Contado',
-      render: (row) => row.autoClosed
+      render: (row) => row.pendingReconciliation
         ? <StatusBadge status="warning" variant="warning" label="Cierre automático" />
-        : row.finalCash != null ? formatCurrency(row.finalCash) : '--',
+        : row.finalCash != null
+          ? <span>{formatCurrency(row.finalCash)}{row.autoClosed && <span className="ml-2 text-xs text-amber-600" title="Se cerró sola y el efectivo se contó después">conciliado</span>}</span>
+          : '--',
     },
     {
       key: 'expectedCash', header: 'Esperado',
@@ -308,7 +348,7 @@ export default function CashRegisterPage(): JSX.Element {
     {
       key: 'difference', header: 'Diferencia',
       render: (row) => {
-        if (row.difference == null) return row.autoClosed ? <span className="text-xs text-gray-400">Sin conteo</span> : '--';
+        if (row.difference == null) return row.pendingReconciliation ? <span className="text-xs text-gray-400">Sin conteo</span> : '--';
         const color = row.difference === 0 ? 'text-gray-500' : row.difference > 0 ? 'text-green-600' : 'text-red-600';
         return <span className={`font-semibold ${color}`}>{formatCurrency(row.difference)}</span>;
       },
@@ -321,6 +361,12 @@ export default function CashRegisterPage(): JSX.Element {
       key: 'closedAt', header: 'Cerrada',
       render: (row) => row.closedAt ? formatDateTime(row.closedAt) : '--',
     },
+    ...(canReconcile ? [{
+      key: 'reconcile', header: '',
+      render: (row: CashClosureRow) => row.pendingReconciliation
+        ? <button type="button" onClick={() => openReconcile(row)} className="px-2.5 py-1 text-xs font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-lg transition-colors">Conciliar</button>
+        : null,
+    }] : []),
   ];
 
   if (loading) {
@@ -666,20 +712,35 @@ export default function CashRegisterPage(): JSX.Element {
               <p className="text-sm text-gray-400 text-center py-4">No hay cierres registrados</p>
             ) : (
               <div className="space-y-2">
+                {pendingClosures.length > 0 && (
+                  <div role="status" className="flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                    <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+                    <span>
+                      {pendingClosures.length === 1 ? '1 cierre automático sin contar' : `${pendingClosures.length} cierres automáticos sin contar`}.
+                      {canReconcile ? ' Cuenta el efectivo y concílialo para saber si cuadra.' : ' Un administrador debe contar el efectivo.'}
+                    </span>
+                  </div>
+                )}
                 {closures.slice(0, 5).map((c) => (
                   <div key={c.id} className="flex items-center justify-between gap-2 p-2.5 bg-gray-50 rounded-lg">
                     <div>
                       <p className="text-sm font-medium text-gray-800">{c.user.fullName}</p>
                       <p className="text-xs text-gray-400">{formatDateTime(c.closedAt)}</p>
                     </div>
-                    {c.autoClosed ? (
+                    {c.pendingReconciliation ? (
                       <div className="text-right">
                         <StatusBadge status="warning" variant="warning" label="Cierre automático" />
-                        <p className="text-xs text-gray-400 mt-1">Esperado {formatCurrency(c.expectedCash ?? 0)}</p>
+                        <p className="text-xs text-gray-400 mt-1">Esperado {formatCurrency(c.expectedCash ?? c.initialCash)}</p>
+                        {canReconcile && (
+                          <button type="button" onClick={() => openReconcile(c)} className="mt-1 px-2.5 py-1 text-xs font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-lg transition-colors">
+                            Conciliar
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <div className="text-right">
                         <p className="text-sm font-bold text-gray-900">{formatCurrency(c.finalCash ?? 0)}</p>
+                        {c.autoClosed && <p className="text-xs text-amber-600">Cierre automático conciliado</p>}
                         {c.difference != null && (
                           <p className={`text-xs font-medium ${c.difference === 0 ? 'text-gray-400' : c.difference > 0 ? 'text-green-600' : 'text-red-600'}`}>
                             {c.difference > 0 ? '+' : ''}{formatCurrency(c.difference)}
@@ -705,6 +766,71 @@ export default function CashRegisterPage(): JSX.Element {
       </div>
 
       {closeDialog}
+
+      <Modal
+        isOpen={reconcileTarget !== null}
+        onClose={() => { if (!reconciling) setReconcileTarget(null); }}
+        title="Conciliar cierre automático"
+        size="sm"
+        footer={
+          <div className="flex justify-end gap-2">
+            <LoadingButton variant="secondary" onClick={() => setReconcileTarget(null)} disabled={reconciling}>Cancelar</LoadingButton>
+            <LoadingButton onClick={handleReconcile} loading={reconciling}>Guardar conteo</LoadingButton>
+          </div>
+        }
+      >
+        {reconcileTarget && (() => {
+          const expected = reconcileTarget.expectedCash ?? reconcileTarget.initialCash;
+          const counted = Math.round(Number(countedInput));
+          const hasCount = countedInput.trim() !== '' && Number.isFinite(counted) && counted >= 0;
+          const diff = counted - expected;
+          return (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                La caja de <strong>{reconcileTarget.user.fullName}</strong> se cerró sola el {formatDateTime(reconcileTarget.closedAt)} por inactividad, sin contar el efectivo.
+              </p>
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg text-sm">
+                <span className="text-gray-500">Efectivo esperado</span>
+                <span className="font-bold text-gray-900">{formatCurrency(expected)}</span>
+              </div>
+              <div>
+                <label htmlFor="reconcile-counted" className="block text-sm font-medium text-gray-700 mb-1">Efectivo contado</label>
+                <input
+                  id="reconcile-counted"
+                  type="number"
+                  min={0}
+                  step={1}
+                  inputMode="numeric"
+                  className="tc-input"
+                  value={countedInput}
+                  onChange={(e) => setCountedInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') void handleReconcile(); }}
+                  placeholder="0"
+                />
+              </div>
+              {hasCount && (
+                <p className={`text-sm font-semibold ${diff === 0 ? 'text-gray-600' : diff > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {diff === 0 ? 'Cuadra exacto.' : diff > 0 ? `Sobran ${formatCurrency(diff)}.` : `Faltan ${formatCurrency(-diff)}.`}
+                </p>
+              )}
+              <div>
+                <label htmlFor="reconcile-note" className="block text-sm font-medium text-gray-700 mb-1">Nota (opcional)</label>
+                <input
+                  id="reconcile-note"
+                  type="text"
+                  maxLength={300}
+                  className="tc-input"
+                  value={reconcileNote}
+                  onChange={(e) => setReconcileNote(e.target.value)}
+                  placeholder="Ej: se contó al día siguiente"
+                />
+              </div>
+              {reconcileError && <p role="alert" className="text-sm text-red-600">{reconcileError}</p>}
+              <p className="text-xs text-gray-400">Queda guardado quién concilió y cuánto contó. Solo se puede hacer una vez.</p>
+            </div>
+          );
+        })()}
+      </Modal>
 
       {/* Closures History Modal */}
       {showClosures && (

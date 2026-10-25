@@ -278,6 +278,23 @@ export const cashRouter = t.router({
       );
     }),
 
+  // Conciliación de un cierre automático: quien administra cuenta el efectivo y queda registrado.
+  reconcile: adminOrSupervisor
+    .input(z.object({
+      sessionId: z.number(),
+      countedCash: moneyAmount,
+      note: z.string().trim().max(300).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      return cashSessionService.reconcileAutoClosedSession(
+        input.sessionId,
+        input.countedCash,
+        requireAccountId(ctx),
+        ctx.user.id,
+        input.note || undefined,
+      );
+    }),
+
   getSessionOverview: authenticatedProcedure
     .input(z.object({ sessionId: z.number() }))
     .query(async ({ input, ctx }) => {
