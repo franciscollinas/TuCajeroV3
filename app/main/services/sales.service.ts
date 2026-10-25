@@ -837,7 +837,6 @@ export class SalesService {
 
     const todayStart = new Date(year, month, day).toISOString();
     const todayEnd = new Date(year, month, day, 23, 59, 59, 999).toISOString();
-    const sevenDaysAgo = new Date(year, month, day - 6).toISOString();
     const thirtyDaysAgo = new Date(year, month, day - 29).toISOString();
 
     const branchFilter = branchId ? eq(schema.sales.branchId, branchId) : undefined;
@@ -888,70 +887,28 @@ export class SalesService {
       if (full) recentFull.push(full);
     }
 
-    // Weekly chart
-    const weeklyBuckets: Record<string, { ventas: number; ingresos: number }> = {};
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(year, month, day - i);
-      const name = d.toLocaleDateString('es-CO', { weekday: 'short' });
-      weeklyBuckets[name] = { ventas: 0, ingresos: 0 };
-    }
+    // Gráficos de 7 y 30 días: una sola consulta con las ventas por día local (antes eran dos
+    // consultas que traían todas las ventas del mes y formateaban la fecha de cada una con
+    // toLocaleDateString: con miles de ventas el resumen tardaba más de medio segundo).
+    const dailySales = await reportsService.getSalesByDay(
+      { start: new Date(year, month, day - 29), end: new Date(year, month, day) },
+      accountId,
+      branchId,
+    );
+    const labelOf = (isoDate: string, options: Intl.DateTimeFormatOptions): string => {
+      const [y, m, d] = isoDate.split('-').map(Number);
+      return new Date(y, m - 1, d).toLocaleDateString('es-CO', options);
+    };
 
-    const weekSales = await db
-      .select({ total: schema.sales.total, createdAt: schema.sales.createdAt })
-      .from(schema.sales)
-      .where(
-        and(
-          gte(schema.sales.createdAt, sevenDaysAgo),
-          eq(schema.sales.status, 'COMPLETED'),
-          accountFilter,
-          ...(branchFilter ? [branchFilter] : []),
-        ),
-      );
-
-    weekSales.forEach((s) => {
-      const name = new Date(s.createdAt).toLocaleDateString('es-CO', { weekday: 'short' });
-      if (weeklyBuckets[name]) {
-        weeklyBuckets[name].ventas++;
-        weeklyBuckets[name].ingresos += s.total;
-      }
+    const weeklyChart = dailySales.slice(-7).map((point) => {
+      const name = labelOf(point.date, { weekday: 'short' });
+      return { name: name.charAt(0).toUpperCase() + name.slice(1), ventas: point.sales, ingresos: point.revenue };
     });
 
-    const weeklyChart = Object.keys(weeklyBuckets).map((name) => ({
-      name: name.charAt(0).toUpperCase() + name.slice(1),
-      ...weeklyBuckets[name],
-    }));
-
-    // Monthly chart (30 days)
-    const monthBuckets: Record<string, { ventas: number; ingresos: number }> = {};
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date(year, month, day - i);
-      const name = d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
-      monthBuckets[name] = { ventas: 0, ingresos: 0 };
-    }
-
-    const monthSales = await db
-      .select({ total: schema.sales.total, createdAt: schema.sales.createdAt })
-      .from(schema.sales)
-      .where(
-        and(
-          gte(schema.sales.createdAt, thirtyDaysAgo),
-          eq(schema.sales.status, 'COMPLETED'),
-          accountFilter,
-          ...(branchFilter ? [branchFilter] : []),
-        ),
-      );
-
-    monthSales.forEach((s) => {
-      const name = new Date(s.createdAt).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
-      if (monthBuckets[name]) {
-        monthBuckets[name].ventas++;
-        monthBuckets[name].ingresos += s.total;
-      }
-    });
-
-    const monthlyChart = Object.keys(monthBuckets).map((name) => ({
-      name,
-      ...monthBuckets[name],
+    const monthlyChart = dailySales.map((point) => ({
+      name: labelOf(point.date, { day: 'numeric', month: 'short' }),
+      ventas: point.sales,
+      ingresos: point.revenue,
     }));
 
     // Top products (30 days)
