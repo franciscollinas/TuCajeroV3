@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback, memo } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback, memo } from 'react';
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, User, X, Check,
   Banknote, Smartphone, Navigation, Tag, Truck, Percent, AlertCircle, RefreshCw,
@@ -10,6 +10,7 @@ import { trpc } from '../../trpc';
 import { rendererLogger } from '../../shared/utils/rendererLogger';
 import { useAuth } from '../../shared/context/AuthContext';
 import { formatCurrency } from '../../shared/utils/formatters';
+import { computeCartTotals, quickCashAmounts } from '../../shared/utils/cart-totals';
 import { useBarcodeScanner } from '../../shared/hooks/useBarcodeScanner';
 import type { Product } from '../../shared/types/inventory.types';
 import type { CashRegister } from '../../shared/types/cash.types';
@@ -39,6 +40,8 @@ const ProductCard = memo(function ProductCard({
   onAdd: (product: Product) => void;
 }): JSX.Element {
   const outOfStock = product.stock <= 0;
+  // Solo se avisa cuando queda poco: con el stock normal el cajero necesita nombre y precio.
+  const lowStock = !outOfStock && product.stock <= Math.max(product.minStock || 0, 5);
   return (
     <div
       role="button"
@@ -46,24 +49,23 @@ const ProductCard = memo(function ProductCard({
       onClick={() => !outOfStock && onAdd(product)}
       onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !outOfStock) { e.preventDefault(); onAdd(product); } }}
       aria-label={`${product.name}, ${formatCurrency(product.price)}, ${outOfStock ? 'Sin stock' : `Stock: ${product.stock}`}`}
-      className="tc-card animate-slideUp group"
+      className="tc-card animate-slideUp"
       style={{
         cursor: outOfStock ? 'not-allowed' : 'pointer',
         opacity: outOfStock ? 0.55 : 1,
+        padding: 0,
         border: '2px solid transparent',
-        transition: 'all 0.2s ease',
+        transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
         position: 'relative',
         overflow: 'hidden',
       }}
       onMouseEnter={(e) => {
         if (outOfStock) return;
         e.currentTarget.style.borderColor = 'var(--brand-300)';
-        e.currentTarget.style.transform = 'translateY(-4px)';
         e.currentTarget.style.boxShadow = 'var(--shadow-lg)';
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.borderColor = 'transparent';
-        e.currentTarget.style.transform = 'translateY(0)';
         e.currentTarget.style.boxShadow = 'var(--shadow-card)';
       }}
     >
@@ -76,25 +78,58 @@ const ProductCard = memo(function ProductCard({
           }}
         />
       )}
-      <div style={{ padding: 'var(--space-4)' }}>
-        <p style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <div style={{ padding: 'var(--space-3) var(--space-4)', display: 'flex', flexDirection: 'column', gap: '6px', minHeight: '108px' }}>
+        <p style={{ margin: 0, fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--gray-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {product.category?.name || 'Varios'}
         </p>
-        <h4 style={{ fontWeight: 700, color: outOfStock ? 'var(--gray-400)' : 'var(--gray-800)', fontSize: 'var(--text-sm)', marginBottom: 'var(--space-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <h4 style={{ margin: 0, flex: 1, fontWeight: 700, lineHeight: 1.3, color: outOfStock ? 'var(--gray-400)' : 'var(--gray-800)', fontSize: 'var(--text-sm)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
           {product.name}
         </h4>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ color: outOfStock ? 'var(--gray-400)' : 'var(--brand-600)', fontWeight: 800, fontSize: 'var(--text-base)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-2)' }}>
+          <span style={{ color: outOfStock ? 'var(--gray-400)' : 'var(--brand-600)', fontWeight: 800, fontSize: 'var(--text-base)', fontVariantNumeric: 'tabular-nums' }}>
             {formatCurrency(product.price)}
           </span>
-          <span className={`tc-badge ${outOfStock ? 'tc-badge--danger' : product.stock > 10 ? 'tc-badge--success' : 'tc-badge--danger'}`}>
-            {outOfStock ? 'Sin stock' : `Stock: ${product.stock}`}
-          </span>
+          {outOfStock ? (
+            <span className="tc-badge tc-badge--danger" style={{ whiteSpace: 'nowrap' }}>Sin stock</span>
+          ) : lowStock ? (
+            <span className="tc-badge tc-badge--warning" style={{ whiteSpace: 'nowrap' }}>Quedan {product.stock}</span>
+          ) : null}
         </div>
       </div>
     </div>
   );
 });
+
+function PayMethodButton({ icon, label, hint, color, border, disabled, onClick }: {
+  icon: JSX.Element;
+  label: string;
+  hint?: string;
+  color: string;
+  border: string;
+  disabled: boolean;
+  onClick: () => void;
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px',
+        padding: 'var(--space-4)', minHeight: '92px', borderRadius: 'var(--radius-lg)',
+        background: disabled ? 'var(--gray-50)' : '#fff',
+        border: `2px solid ${disabled ? 'var(--gray-200)' : border}`,
+        color: disabled ? 'var(--gray-400)' : color,
+        fontWeight: 700, fontSize: 'var(--text-base)',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+      }}
+    >
+      {icon}
+      <span>{label}</span>
+      {hint && <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500 }}>{hint}</span>}
+    </button>
+  );
+}
 
 export function POSPage(): JSX.Element {
   const { user } = useAuth();
@@ -120,6 +155,8 @@ export function POSPage(): JSX.Element {
   type PaymentStep = 'options' | 'cash' | 'mixed-step-1' | 'mixed-step-2';
   const [paymentStep, setPaymentStep] = useState<PaymentStep>('options');
   const [mixtoCashAmount, setMixtoCashAmount] = useState(0);
+  const submittingRef = useRef(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -290,6 +327,28 @@ export function POSPage(): JSX.Element {
     }
   };
 
+  // Enter en el buscador: con un lector de código de barras (que escribe y pulsa Enter)
+  // o tras teclear un código, agrega el producto sin tocar el ratón.
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key !== 'Enter') return;
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return;
+    e.preventDefault();
+    const exact = products.find((p) => p.code.toLowerCase() === term || p.barcode?.toLowerCase() === term);
+    const matches = exact
+      ? [exact]
+      : products.filter((p) => p.name.toLowerCase().includes(term) || p.code.toLowerCase().includes(term) || p.barcode?.toLowerCase().includes(term));
+    if (matches.length === 1) {
+      addToCart(matches[0]);
+      setSearchTerm('');
+      setDebouncedSearch('');
+    } else if (matches.length === 0) {
+      setMessageType('error');
+      setMessage(`No hay productos que coincidan con "${searchTerm.trim()}".`);
+      setTimeout(() => setMessage(''), 3000);
+    }
+  };
+
   // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300);
@@ -309,31 +368,69 @@ export function POSPage(): JSX.Element {
       .slice(0, 40);
   }, [products, debouncedSearch]);
 
-  const subtotal = useMemo(
-    () => cart.reduce((sum, item) => sum + item.quantity * item.unitPrice - item.discount, 0),
-    [cart],
-  );
-
   const ivaEnabled = businessConfig?.ivaEnabled ?? false;
 
-  const tax = useMemo(
-    () => {
-      if (!ivaEnabled) return 0;
-      return cart.reduce((sum, item) => {
-        return sum + (item.quantity * item.unitPrice - item.discount) * (item.product.taxRate || 0);
-      }, 0);
-    },
-    [cart, ivaEnabled],
+  // Mismo cálculo que el servidor (pesos enteros): el total de pantalla es el que se guarda.
+  const { subtotal, tax, discountAmount: calculatedDiscount, total } = useMemo(
+    () => computeCartTotals({
+      lines: cart.map((item) => ({
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        discount: item.discount,
+        taxRate: item.product.taxRate || 0,
+      })),
+      ivaEnabled,
+      deliveryFee,
+      discount: globalDiscount,
+      discountType,
+    }),
+    [cart, ivaEnabled, deliveryFee, globalDiscount, discountType],
   );
 
-  const calculatedDiscount = useMemo(
-    () => (discountType === 'percentage' ? (subtotal * globalDiscount) / 100 : globalDiscount),
-    [subtotal, globalDiscount, discountType],
-  );
-
-  const total = subtotal + tax + deliveryFee - calculatedDiscount;
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
   const remaining = total - totalPaid;
+  const changeDue = Math.max(0, totalPaid - total);
+  const cashQuickAmounts = useMemo(() => quickCashAmounts(remaining), [remaining]);
+  const payBlocked = remaining <= 0.1 || loading;
+  const clampDiscount = (value: number): number =>
+    discountType === 'percentage' ? Math.min(100, Math.max(0, value)) : Math.min(subtotal, Math.max(0, Math.round(value)));
+
+  const openCheckout = (): void => {
+    setShowCheckoutModal(true);
+    setPaymentStep('options');
+    setPayments([]);
+    setCashReceived(0);
+    setMixtoCashAmount(0);
+    setModalError(null);
+  };
+
+  const closeCheckout = (): void => {
+    setShowCheckoutModal(false);
+    setPayments([]);
+    setPaymentStep('options');
+    setCashReceived(0);
+    setMixtoCashAmount(0);
+    setModalError(null);
+  };
+
+  // Atajos: F2 busca, F9 cobra, Esc cierra el cobro. Sin lista de dependencias a propósito:
+  // se vuelve a registrar en cada render para ver siempre el carrito actual.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'F2') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      } else if (e.key === 'F9' && cart.length > 0 && !showCheckoutModal && !showCustomerModal && !printReceiptSale) {
+        e.preventDefault();
+        openCheckout();
+      } else if (e.key === 'Escape' && showCheckoutModal && !loading) {
+        closeCheckout();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  });
 
   const refreshCashState = async (): Promise<void> => {
     if (!user) return;
@@ -419,14 +516,20 @@ export function POSPage(): JSX.Element {
   };
 
   const addMixtoSecondPayment = (method: PaymentMethod): void => {
-    const finalPayments: PaymentInput[] = [
+    if (method === 'credito' && !selectedCustomerId) {
+      setMessageType('error');
+      setMessage('Seleccione un cliente para realizar una venta a crédito.');
+      setTimeout(() => setMessage(''), 3000);
+      return;
+    }
+    // Se deja el pago armado y el cajero confirma la venta con el botón de abajo
+    // (antes se cobraba en el mismo clic, sin resumen ni oportunidad de corregir).
+    setPayments([
       { method: 'efectivo', amount: mixtoCashAmount },
       { method, amount: total - mixtoCashAmount },
-    ];
+    ]);
     setPaymentStep('options');
     setMixtoCashAmount(0);
-    setPayments(finalPayments);
-    void processCompleteSale(finalPayments, false);
   };
 
   const handleCompleteSale = async (): Promise<void> => {
@@ -446,6 +549,8 @@ export function POSPage(): JSX.Element {
 
   const processCreditSale = async (finalPayments: PaymentInput[]): Promise<void> => {
     if (!user || !activeCash || cart.length === 0 || !selectedCustomerId) return;
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setLoading(true);
     try {
       const items: CartItemInput[] = cart.map((i) => ({
@@ -473,12 +578,15 @@ export function POSPage(): JSX.Element {
     } catch (err) {
       setModalError(err instanceof Error ? err.message : 'Error al procesar');
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   };
 
   const processCompleteSale = async (finalPayments: PaymentInput[], isCreditSale = false): Promise<void> => {
     if (!user || !activeCash || cart.length === 0) return;
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setLoading(true);
     try {
       const items: CartItemInput[] = cart.map((i) => ({
@@ -504,6 +612,7 @@ export function POSPage(): JSX.Element {
       const changeMsg = change > 0 ? ` (Cambio: ${formatCurrency(change)})` : '';
       setMessageType('success');
       setMessage(`Venta #${sale.saleNumber} completada${changeMsg}`);
+      setTimeout(() => setMessage(''), 6000);
       void refreshProducts();
       // Cerrar modal de pago y mostrar modal de impresión
       setShowCheckoutModal(false);
@@ -511,6 +620,7 @@ export function POSPage(): JSX.Element {
     } catch (err) {
       setModalError(err instanceof Error ? err.message : 'Error al procesar');
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   };
@@ -568,29 +678,18 @@ export function POSPage(): JSX.Element {
       <div className="pos-grid" style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 'var(--space-4)', height: 'calc(100vh - 140px)', minHeight: 0 }}>
         {/* === LEFT COLUMN === */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', minHeight: 0, overflow: 'hidden' }}>
-          {/* Header */}
-          <div style={{ animation: 'slideDown 0.4s ease', background: 'linear-gradient(135deg, var(--brand-600) 0%, var(--brand-500) 100%)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-4) var(--space-5)', boxShadow: '0 4px 12px rgba(54, 65, 245, 0.2)', flexShrink: 0 }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-4)' }}>
-              <div>
-                <h1 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 'var(--space-3)', color: '#fff', fontSize: 'var(--text-lg)', fontWeight: 800 }}>
-                  <ShoppingCart size={24} />
-                  Punto de Venta
-                </h1>
-                <p style={{ margin: '2px 0 0', color: 'rgba(255,255,255,0.85)', fontSize: 'var(--text-xs)', fontWeight: 600 }}>
-                  Caja #{activeCash.id} &middot; {activeCash.openedAt ? new Date(activeCash.openedAt).toLocaleDateString() : ''}
-                </p>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                <span style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', padding: '4px 12px', borderRadius: 'var(--radius-full)', fontWeight: 700, fontSize: 'var(--text-xs)', display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
-                  <ScanLine size={12} />
-                  POS Activo
-                </span>
-                <button onClick={() => navigate('/sales/history')} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-lg)', fontWeight: 600, fontSize: 'var(--text-xs)', cursor: 'pointer', transition: 'all var(--transition-fast)' }}>
-                  <History size={16} />
-                  Historial
-                </button>
-              </div>
+          {/* Encabezado */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', flexShrink: 0 }}>
+            <div>
+              <h1 style={{ margin: 0, fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--gray-900)' }}>Punto de venta</h1>
+              <p style={{ margin: '2px 0 0', color: 'var(--gray-500)', fontSize: 'var(--text-xs)', fontWeight: 600 }}>
+                Caja #{activeCash.id} abierta el {activeCash.openedAt ? new Date(activeCash.openedAt).toLocaleDateString() : ''}
+              </p>
             </div>
+            <button type="button" onClick={() => navigate('/sales/history')} className="tc-btn tc-btn--secondary" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minHeight: '40px' }}>
+              <History size={16} />
+              Historial
+            </button>
           </div>
 
           {/* Search */}
@@ -599,17 +698,19 @@ export function POSPage(): JSX.Element {
               <div style={{ position: 'relative', flex: 1 }}>
                 <Search style={{ position: 'absolute', left: 'var(--space-4)', top: '50%', transform: 'translateY(-50%)', color: 'var(--brand-500)', pointerEvents: 'none' }} size={20} />
                 <input
+                  ref={searchInputRef}
                   type="text"
-                  placeholder="Buscar producto por nombre, código o código de barras..."
+                  placeholder="Buscar por nombre, código o código de barras (F2)"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={handleSearchKeyDown}
                   className="tc-input"
                   style={{ paddingLeft: '48px', paddingRight: '48px', minHeight: '52px', fontSize: '18px', background: '#ffffff', color: 'var(--gray-900)', border: '2px solid var(--brand-100)', boxShadow: 'var(--shadow-sm)', fontWeight: 500 }}
                   autoFocus
                   aria-label="Buscar producto"
                 />
                 {searchTerm && (
-                  <button onClick={() => setSearchTerm('')} style={{ position: 'absolute', right: 'var(--space-2)', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--gray-400)', cursor: 'pointer', padding: 'var(--space-2)' }}>
+                  <button type="button" onClick={() => setSearchTerm('')} aria-label="Borrar búsqueda" style={{ position: 'absolute', right: 'var(--space-2)', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--gray-400)', cursor: 'pointer', padding: 'var(--space-2)' }}>
                     <X size={18} />
                   </button>
                 )}
@@ -631,8 +732,8 @@ export function POSPage(): JSX.Element {
           </div>
 
           {/* Products Grid */}
-          <div style={{ flex: 1, overflowY: 'auto', paddingRight: 'var(--space-2)', minHeight: 0 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 'var(--space-3)' }}>
+          <div className="pos-products" style={{ flex: 1, overflowY: 'auto', paddingRight: 'var(--space-2)', minHeight: 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 'var(--space-3)' }}>
               {filteredProducts.map((product) => (
                 <ProductCard key={product.id} product={product} onAdd={addToCart} />
               ))}
@@ -651,7 +752,7 @@ export function POSPage(): JSX.Element {
               </h3>
               {cart.length > 0 && (
                 <span style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', padding: '4px 12px', borderRadius: 'var(--radius-full)', fontWeight: 700, fontSize: 'var(--text-xs)' }}>
-                  {cart.reduce((sum, item) => sum + item.quantity, 0)} items
+                  {cart.reduce((sum, item) => sum + item.quantity, 0)} {cart.reduce((sum, item) => sum + item.quantity, 0) === 1 ? 'ítem' : 'ítems'}
                 </span>
               )}
             </div>
@@ -743,81 +844,65 @@ export function POSPage(): JSX.Element {
 
             {/* Payment Panel */}
             <div style={{ padding: 'var(--space-4)', background: 'linear-gradient(180deg, #fff 0%, #f8f9ff 100%)', borderTop: '2px solid var(--brand-200)' }}>
-              {/* Totals */}
-              <div style={{ background: 'linear-gradient(135deg, var(--gray-50) 0%, #f0f4ff 100%)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-3)', marginBottom: 'var(--space-3)', border: '2px solid var(--brand-100)' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
+              {/* Totales */}
+              <div style={{ marginBottom: 'var(--space-3)' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '0 var(--space-1)', fontVariantNumeric: 'tabular-nums' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: 'var(--text-xs)', color: 'var(--gray-600)' }}>Subtotal</span>
                     <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--gray-800)' }}>{formatCurrency(subtotal)}</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--gray-600)' }}>IVA</span>
-                    <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--gray-800)' }}>{formatCurrency(tax)}</span>
-                  </div>
-                  {globalDiscount > 0 && (
+                  {ivaEnabled && (
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--gray-600)' }}>Descuento ({discountType === 'percentage' ? `${globalDiscount}%` : 'FIJO'})</span>
+                      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--gray-600)' }}>IVA</span>
+                      <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--gray-800)' }}>{formatCurrency(tax)}</span>
+                    </div>
+                  )}
+                  {calculatedDiscount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--gray-600)' }}>Descuento{discountType === 'percentage' ? ` (${globalDiscount}%)` : ''}</span>
                       <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--success-600)' }}>-{formatCurrency(calculatedDiscount)}</span>
                     </div>
                   )}
                   {deliveryFee > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--gray-600)' }}>Delivery</span>
+                      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--gray-600)' }}>Domicilio</span>
                       <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--gray-800)' }}>{formatCurrency(deliveryFee)}</span>
                     </div>
                   )}
-                  {/* Payment progress */}
-                  {payments.length > 0 && (
-                    <div style={{ marginTop: 'var(--space-2)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)', marginBottom: '4px' }}>
-                        <span style={{ fontWeight: 600, color: 'var(--success-700)' }}>Pagado: {formatCurrency(totalPaid)}</span>
-                        <span style={{ fontWeight: 600, color: remaining > 0.1 ? 'var(--warning-600)' : 'var(--success-700)' }}>
-                          {remaining > 0.1 ? `Falta: ${formatCurrency(remaining)}` : 'Cubierto'}
-                        </span>
-                      </div>
-                      <div style={{ height: '6px', background: 'var(--gray-200)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${Math.min(100, (totalPaid / total) * 100)}%`, background: remaining > 0.1 ? 'var(--warning-400)' : 'var(--success-500)', borderRadius: 'var(--radius-full)', transition: 'width 0.3s ease' }} />
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-1)', marginTop: 'var(--space-2)' }}>
-                        {payments.map((p, idx) => (
-                          <span key={idx} className="tc-badge tc-badge--success" style={{ fontSize: 'var(--text-xs)', padding: '2px 6px' }}>
-                            {p.method} {formatCurrency(p.amount)}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  <div style={{ borderTop: '2px solid var(--brand-200)', marginTop: 'var(--space-2)', paddingTop: 'var(--space-2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(135deg, var(--brand-50) 0%, #e8edff 100%)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', margin: '0 calc(-1 * var(--space-3))' }}>
-                    <span style={{ fontSize: 'var(--text-xs)', fontWeight: 800, color: 'var(--brand-700)', textTransform: 'uppercase' }}>Total a Pagar</span>
-                    <span style={{ fontSize: 'var(--text-xl)', fontWeight: 900, color: 'var(--brand-600)' }}>{formatCurrency(total)}</span>
-                  </div>
+                </div>
+                <div style={{ marginTop: 'var(--space-2)', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg)', background: 'var(--brand-50)', border: '2px solid var(--brand-200)' }}>
+                  <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--brand-700)' }}>Total a pagar</span>
+                  <span style={{ fontSize: 'var(--text-2xl, 1.75rem)', fontWeight: 900, color: 'var(--brand-600)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(total)}</span>
                 </div>
               </div>
 
-              {/* Delivery & Discount */}
+              {/* Domicilio y descuento */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
-                <div style={{ position: 'relative' }}>
-                  <Truck style={{ position: 'absolute', left: 'var(--space-2)', top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', pointerEvents: 'none' }} size={12} />
-                  <input type="number" placeholder="Delivery" value={deliveryFee || ''} onChange={(e) => setDeliveryFee(Number(e.target.value))} className="tc-input" style={{ paddingLeft: '28px', minHeight: '34px', fontSize: 'var(--text-xs)', background: '#fff' }} aria-label="Costo de envío" />
-                </div>
-                <div style={{ position: 'relative', display: 'flex', gap: 'var(--space-1)' }}>
-                  {discountType === 'percentage' ? <Percent style={{ position: 'absolute', left: 'var(--space-2)', top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', pointerEvents: 'none' }} size={12} /> : <DollarSign style={{ position: 'absolute', left: 'var(--space-2)', top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', pointerEvents: 'none' }} size={12} />}
-                  <input type="number" placeholder="Descuento" value={globalDiscount || ''} onChange={(e) => setGlobalDiscount(Number(e.target.value))} className="tc-input" style={{ paddingLeft: '28px', minHeight: '34px', fontSize: 'var(--text-xs)', background: '#fff', width: '70px' }} aria-label="Descuento" />
-                  <button type="button" onClick={() => setDiscountType(discountType === 'percentage' ? 'fixed' : 'percentage')} aria-label={`Cambiar tipo de descuento: ${discountType === 'percentage' ? 'porcentaje' : 'fijo'}`} style={{ minHeight: '34px', padding: '0 var(--space-2)', border: '1px solid var(--gray-300)', borderRadius: 'var(--radius-md)', background: 'var(--gray-100)', cursor: 'pointer', fontSize: 'var(--text-xs)', fontWeight: 600 }}>
-                    {discountType === 'percentage' ? '%' : '$'}
-                  </button>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--gray-600)' }}>
+                  Domicilio ($)
+                  <input type="number" min={0} placeholder="0" value={deliveryFee || ''} onChange={(e) => setDeliveryFee(Math.max(0, Math.round(Number(e.target.value) || 0)))} className="tc-input" style={{ minHeight: '36px', fontSize: 'var(--text-sm)', background: '#fff' }} />
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--gray-600)' }}>
+                  <span>Descuento ({discountType === 'percentage' ? '%' : '$'})</span>
+                  <div style={{ display: 'flex', gap: 'var(--space-1)' }}>
+                    <input type="number" min={0} max={discountType === 'percentage' ? 100 : subtotal} placeholder="0" value={globalDiscount || ''} onChange={(e) => setGlobalDiscount(clampDiscount(Number(e.target.value) || 0))} className="tc-input" style={{ minHeight: '36px', fontSize: 'var(--text-sm)', background: '#fff', minWidth: 0, flex: 1 }} aria-label="Descuento" />
+                    <button type="button" onClick={() => { setDiscountType(discountType === 'percentage' ? 'fixed' : 'percentage'); setGlobalDiscount(0); }} aria-label={`Tipo de descuento: ${discountType === 'percentage' ? 'porcentaje' : 'valor fijo'}. Pulsa para cambiar`} style={{ minHeight: '36px', minWidth: '36px', padding: '0 var(--space-2)', border: '1px solid var(--gray-300)', borderRadius: 'var(--radius-md)', background: 'var(--gray-100)', cursor: 'pointer', fontSize: 'var(--text-xs)', fontWeight: 700 }}>
+                      {discountType === 'percentage' ? '%' : '$'}
+                    </button>
+                  </div>
                 </div>
               </div>
 
               {/* Cobrar Button */}
               <button
-                onClick={() => { setShowCheckoutModal(true); setPaymentStep('options'); setPayments([]); setCashReceived(0); setMixtoCashAmount(0); setModalError(null); }}
+                onClick={openCheckout}
                 disabled={cart.length === 0 || showCheckoutModal}
                 aria-label={`Cobrar ${formatCurrency(total)}`}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-3)', padding: 'var(--space-4)', borderRadius: 'var(--radius-xl)', background: cart.length > 0 && !showCheckoutModal ? 'linear-gradient(135deg, var(--success-600) 0%, var(--success-500) 100%)' : 'var(--gray-300)', border: 'none', color: '#fff', fontWeight: 800, fontSize: 'var(--text-lg)', cursor: cart.length === 0 || showCheckoutModal ? 'not-allowed' : 'pointer', opacity: cart.length === 0 || showCheckoutModal ? 0.5 : 1, transition: 'all var(--transition-fast)', boxShadow: cart.length > 0 && !showCheckoutModal ? '0 4px 16px rgba(18, 183, 106, 0.5)' : 'none', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 'var(--space-2)', minHeight: '56px' }}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-3)', padding: 'var(--space-4)', borderRadius: 'var(--radius-xl)', background: cart.length > 0 && !showCheckoutModal ? 'linear-gradient(135deg, var(--success-600) 0%, var(--success-500) 100%)' : 'var(--gray-300)', border: 'none', color: '#fff', fontWeight: 800, fontSize: 'var(--text-lg)', cursor: cart.length === 0 || showCheckoutModal ? 'not-allowed' : 'pointer', opacity: cart.length === 0 || showCheckoutModal ? 0.5 : 1, transition: 'all var(--transition-fast)', boxShadow: cart.length > 0 && !showCheckoutModal ? '0 4px 16px rgba(18, 183, 106, 0.5)' : 'none', marginBottom: 'var(--space-2)', minHeight: '56px' }}
               >
                 <Banknote size={24} />
-                <span>COBRAR {formatCurrency(total)}</span>
+                <span>Cobrar {formatCurrency(total)}</span>
+                <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, opacity: 0.8, border: '1px solid rgba(255,255,255,0.5)', borderRadius: '6px', padding: '1px 6px' }}>F9</span>
               </button>
 
               {/* Clear Cart */}
@@ -833,15 +918,15 @@ export function POSPage(): JSX.Element {
       {/* CHECKOUT MODAL */}
       {showCheckoutModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0, 0, 0, 0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
-          onClick={(e) => { if (e.target === e.currentTarget) { setShowCheckoutModal(false); setPayments([]); setPaymentStep('options'); setCashReceived(0); setMixtoCashAmount(0); setModalError(null); } }}>
-          <div style={{ background: 'var(--gray-50)', borderRadius: 'var(--radius-2xl)', width: '95vw', maxWidth: '900px', maxHeight: '90vh', overflow: 'auto', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
+          onClick={(e) => { if (e.target === e.currentTarget && !loading) closeCheckout(); }}>
+          <div role="dialog" aria-modal="true" aria-label="Cobro" style={{ background: 'var(--gray-50)', borderRadius: 'var(--radius-2xl)', width: '95vw', maxWidth: '900px', maxHeight: '90vh', overflow: 'auto', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
             {/* Modal Header */}
             <div style={{ padding: 'var(--space-4)', background: 'linear-gradient(135deg, var(--brand-600) 0%, var(--brand-500) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h2 style={{ margin: 0, fontWeight: 800, fontSize: 'var(--text-xl)', color: '#fff', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                 <Banknote size={28} />
                 Cobro - Total: {formatCurrency(total)}
               </h2>
-              <button onClick={() => { setShowCheckoutModal(false); setPayments([]); setPaymentStep('options'); setCashReceived(0); setMixtoCashAmount(0); setModalError(null); }} style={{ width: '40px', height: '40px', borderRadius: 'var(--radius-lg)', background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <button type="button" onClick={() => closeCheckout()} aria-label="Cerrar el cobro" style={{ width: '40px', height: '40px', borderRadius: 'var(--radius-lg)', background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <X size={20} />
               </button>
             </div>
@@ -859,9 +944,17 @@ export function POSPage(): JSX.Element {
             )}
 
             {/* Modal Body */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', padding: 'var(--space-4)' }}>
+            <div className="pos-checkout-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', padding: 'var(--space-4)' }}>
               {/* Left: Adjustments */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                {/* Cambio a devolver: queda a la vista hasta confirmar la venta */}
+                {changeDue > 0 && (
+                  <div role="status" aria-live="polite" style={{ padding: 'var(--space-4)', borderRadius: 'var(--radius-xl)', background: 'var(--success-600)', color: '#fff', textAlign: 'center', boxShadow: '0 4px 16px rgba(18, 183, 106, 0.35)' }}>
+                    <p style={{ margin: 0, fontSize: 'var(--text-sm)', fontWeight: 600, opacity: 0.9 }}>Cambio a devolver</p>
+                    <p style={{ margin: '2px 0 0', fontSize: 'var(--text-3xl)', fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(changeDue)}</p>
+                  </div>
+                )}
+
                 {/* Cliente */}
                 <div className="tc-card" style={{ padding: 'var(--space-3)', border: '2px solid var(--brand-100)' }}>
                   <h4 style={{ margin: '0 0 var(--space-2)', fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--brand-700)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
@@ -885,11 +978,11 @@ export function POSPage(): JSX.Element {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
                     <div style={{ position: 'relative' }}>
                       <Truck style={{ position: 'absolute', left: 'var(--space-2)', top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)' }} size={14} />
-                      <input type="number" placeholder="Delivery" value={deliveryFee || ''} onChange={(e) => setDeliveryFee(Number(e.target.value))} className="tc-input" style={{ paddingLeft: '32px', minHeight: '40px', background: '#fff' }} />
+                      <input type="number" placeholder="Domicilio" min={0} value={deliveryFee || ''} onChange={(e) => setDeliveryFee(Math.max(0, Math.round(Number(e.target.value) || 0)))} aria-label="Domicilio" className="tc-input" style={{ paddingLeft: '32px', minHeight: '40px', background: '#fff' }} />
                     </div>
                     <div style={{ position: 'relative', display: 'flex', gap: '4px' }}>
                       {discountType === 'percentage' ? <Percent style={{ position: 'absolute', left: 'var(--space-2)', top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)' }} size={14} /> : <DollarSign style={{ position: 'absolute', left: 'var(--space-2)', top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)' }} size={14} />}
-                      <input type="number" placeholder={discountType === 'percentage' ? '%' : '$'} value={globalDiscount || ''} onChange={(e) => setGlobalDiscount(Number(e.target.value))} className="tc-input" style={{ paddingLeft: '32px', minHeight: '40px', background: '#fff', width: '80px' }} />
+                      <input type="number" placeholder="Descuento" min={0} value={globalDiscount || ''} onChange={(e) => setGlobalDiscount(clampDiscount(Number(e.target.value) || 0))} aria-label="Descuento" className="tc-input" style={{ paddingLeft: '32px', minHeight: '40px', background: '#fff', width: '80px' }} />
                       <button type="button" onClick={() => setDiscountType(discountType === 'percentage' ? 'fixed' : 'percentage')} style={{ minHeight: '40px', padding: '0 var(--space-2)', border: '1px solid var(--gray-300)', borderRadius: 'var(--radius-md)', background: 'var(--gray-100)', cursor: 'pointer', fontWeight: 600 }}>
                         {discountType === 'percentage' ? '%' : '$'}
                       </button>
@@ -939,6 +1032,11 @@ export function POSPage(): JSX.Element {
                       ))}
                     </div>
                     {remaining > 0.1 && <p style={{ fontSize: 'var(--text-sm)', color: 'var(--warning-600)', fontWeight: 700, marginTop: 'var(--space-2)' }}>Falta: {formatCurrency(remaining)}</p>}
+                    {!loading && (
+                      <button type="button" onClick={() => { setPayments([]); setPaymentStep('options'); setCashReceived(0); }} style={{ marginTop: 'var(--space-2)', background: 'transparent', border: 'none', padding: 0, color: 'var(--gray-600)', fontWeight: 600, fontSize: 'var(--text-xs)', textDecoration: 'underline', cursor: 'pointer' }}>
+                        Cambiar forma de pago
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -953,30 +1051,12 @@ export function POSPage(): JSX.Element {
 
                   {paymentStep === 'options' && (
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
-                      <button onClick={() => addPayment('efectivo')} disabled={remaining <= 0.1} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', background: '#fff', border: '2px solid var(--success-300)', color: 'var(--success-600)', fontWeight: 700, fontSize: 'var(--text-base)', cursor: remaining <= 0.1 ? 'not-allowed' : 'pointer', opacity: remaining <= 0.1 ? 0.5 : 1 }}>
-                        <Banknote size={32} />
-                        EFECTIVO
-                      </button>
-                      <button onClick={() => addPayment('nequi')} disabled={remaining <= 0.1} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', background: '#fff', border: '2px solid #e9d5ff', color: '#9333ea', fontWeight: 700, fontSize: 'var(--text-base)', cursor: remaining <= 0.1 ? 'not-allowed' : 'pointer', opacity: remaining <= 0.1 ? 0.5 : 1 }}>
-                        <Smartphone size={32} />
-                        NEQUI
-                      </button>
-                      <button onClick={() => addPayment('daviplata')} disabled={remaining <= 0.1} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', background: '#fff', border: '2px solid #fecaca', color: '#dc2626', fontWeight: 700, fontSize: 'var(--text-base)', cursor: remaining <= 0.1 ? 'not-allowed' : 'pointer', opacity: remaining <= 0.1 ? 0.5 : 1 }}>
-                        <CreditCard size={32} />
-                        DAVIPLATA
-                      </button>
-                      <button onClick={() => addPayment('transferencia')} disabled={remaining <= 0.1} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', background: '#fff', border: '2px solid var(--brand-300)', color: 'var(--brand-600)', fontWeight: 700, fontSize: 'var(--text-base)', cursor: remaining <= 0.1 ? 'not-allowed' : 'pointer', opacity: remaining <= 0.1 ? 0.5 : 1 }}>
-                        <Navigation size={32} />
-                        TRANSFER.
-                      </button>
-                      <button onClick={() => { if (remaining > 0.1) { setPaymentStep('mixed-step-1'); setMixtoCashAmount(0); } }} disabled={remaining <= 0.1} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', background: '#fff', border: '2px solid var(--warning-300)', color: 'var(--warning-600)', fontWeight: 700, fontSize: 'var(--text-base)', cursor: remaining <= 0.1 ? 'not-allowed' : 'pointer', opacity: remaining <= 0.1 ? 0.5 : 1 }}>
-                        <CreditCard size={32} />
-                        MIXTO
-                      </button>
-                      <button onClick={() => addPayment('credito')} disabled={remaining <= 0.1 || !selectedCustomerId} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', background: selectedCustomerId && remaining > 0.1 ? '#fff' : '#f9fafb', border: `2px solid ${selectedCustomerId ? '#f59e0b' : '#e5e7eb'}`, color: selectedCustomerId && remaining > 0.1 ? '#d97706' : '#9ca3af', fontWeight: 700, fontSize: 'var(--text-base)', cursor: remaining <= 0.1 || !selectedCustomerId ? 'not-allowed' : 'pointer', opacity: remaining <= 0.1 || !selectedCustomerId ? 0.5 : 1 }}>
-                        <Tag size={32} />
-                        CRÉDITO
-                      </button>
+                      <PayMethodButton label="Efectivo" icon={<Banknote size={30} />} color="var(--success-600)" border="var(--success-300)" disabled={payBlocked} onClick={() => addPayment('efectivo')} />
+                      <PayMethodButton label="Nequi" icon={<Smartphone size={30} />} color="#9333ea" border="#e9d5ff" disabled={payBlocked} onClick={() => addPayment('nequi')} />
+                      <PayMethodButton label="Daviplata" icon={<CreditCard size={30} />} color="#dc2626" border="#fecaca" disabled={payBlocked} onClick={() => addPayment('daviplata')} />
+                      <PayMethodButton label="Transferencia" icon={<Navigation size={30} />} color="var(--brand-600)" border="var(--brand-300)" disabled={payBlocked} onClick={() => addPayment('transferencia')} />
+                      <PayMethodButton label="Mixto" hint="Efectivo + otro" icon={<CreditCard size={30} />} color="var(--warning-600)" border="var(--warning-300)" disabled={payBlocked} onClick={() => { setPaymentStep('mixed-step-1'); setMixtoCashAmount(0); }} />
+                      <PayMethodButton label="Crédito (fiado)" hint={selectedCustomerId ? undefined : 'Elige un cliente'} icon={<Tag size={30} />} color="#d97706" border="#f59e0b" disabled={payBlocked || !selectedCustomerId} onClick={() => addPayment('credito')} />
                     </div>
                   )}
 
@@ -990,8 +1070,17 @@ export function POSPage(): JSX.Element {
                       </div>
                       <div style={{ position: 'relative', marginBottom: 'var(--space-3)' }}>
                         <Banknote style={{ position: 'absolute', left: 'var(--space-3)', top: '50%', transform: 'translateY(-50%)', color: 'var(--success-600)' }} size={24} />
-                        <input type="number" placeholder="Monto..." value={cashReceived || ''} onChange={(e) => setCashReceived(Number(e.target.value))} onKeyDown={(e) => { if (e.key === 'Enter') confirmCashPayment(); }} className="tc-input" style={{ paddingLeft: '48px', minHeight: '56px', fontSize: 'var(--text-xl)', fontWeight: 700, background: '#fff', textAlign: 'right' }} autoFocus />
+                        <input type="number" placeholder="Monto..." value={cashReceived || ''} min={0} onChange={(e) => setCashReceived(Math.max(0, Math.round(Number(e.target.value) || 0)))} onKeyDown={(e) => { if (e.key === 'Enter') confirmCashPayment(); }} className="tc-input" style={{ paddingLeft: '48px', minHeight: '56px', fontSize: 'var(--text-xl)', fontWeight: 700, background: '#fff', textAlign: 'right' }} autoFocus />
                       </div>
+                      {cashQuickAmounts.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+                          {cashQuickAmounts.map((amount, i) => (
+                            <button key={amount} type="button" onClick={() => setCashReceived(amount)} style={{ padding: 'var(--space-2) var(--space-3)', minHeight: '40px', borderRadius: 'var(--radius-md)', background: cashReceived === amount ? 'var(--success-600)' : '#fff', color: cashReceived === amount ? '#fff' : 'var(--success-700)', border: '2px solid var(--success-300)', fontWeight: 700, fontSize: 'var(--text-sm)', cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}>
+                              {i === 0 ? 'Exacto' : formatCurrency(amount)}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       {cashReceived > 0 && (
                         <div style={{ padding: 'var(--space-3)', background: cashReceived >= remaining ? 'var(--success-100)' : 'var(--warning-100)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-3)', textAlign: 'center' }}>
                           {cashReceived >= remaining ? (

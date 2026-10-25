@@ -26,6 +26,7 @@
   --brand-500: #465fff;
   --brand-600: #3641f5;
   --brand-700: #2a31d8;
+  --brand-800: #2327a8;
 
   --gray-25: #fcfcfd;
   --gray-50: #f9fafb;
@@ -44,6 +45,18 @@
   --warning-500: #f79009;
   --danger-500: #f04438;
   --danger-600: #d92d20;
+
+  /* Tonos que el punto de venta usaba sin estar definidos (los bordes y colores no se aplicaban). */
+  --success-50: #ecfdf3;
+  --success-100: #d1fadf;
+  --success-200: #a6f4c5;
+  --success-300: #6ce9a6;
+  --success-700: #027a48;
+  --warning-100: #fef0c7;
+  --warning-300: #fec84b;
+  --warning-600: #dc6803;
+  --warning-700: #b54708;
+  --danger-400: #f97066;
 
   --border-light: #e4e7ec;
 
@@ -400,6 +413,16 @@ body {
 .tc-main::-webkit-scrollbar-thumb:hover,
 .tc-nav::-webkit-scrollbar-thumb:hover,
 .tc-card::-webkit-scrollbar-thumb:hover { background: var(--gray-400); background-clip: padding-box; }
+
+/* ─── Punto de venta en ventanas pequeñas ─── */
+@media (max-width: 1100px) {
+  .pos-grid { grid-template-columns: 1fr !important; height: auto !important; }
+  .pos-grid > div { overflow: visible !important; }
+  .pos-products { max-height: 55vh; }
+}
+@media (max-width: 760px) {
+  .pos-checkout-grid { grid-template-columns: 1fr !important; }
+}
 
 /* ─── Reduced motion ─── */
 @media (prefers-reduced-motion: reduce) {
