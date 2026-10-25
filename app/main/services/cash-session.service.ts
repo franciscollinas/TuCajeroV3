@@ -1,4 +1,4 @@
-import { eq, and, desc, sum, count, gte, isNull, lte, or } from 'drizzle-orm';
+import { eq, and, desc, sum, count, gte, inArray, isNull, lte, or } from 'drizzle-orm';
 
 import { getDatabase, schema } from '../db';
 import { AppError, ErrorCode } from '../utils/errors';
@@ -69,9 +69,21 @@ export class CashSessionService {
       .orderBy(desc(schema.cashSessions.closedAt))
       .limit(safeTake);
 
+    // Una caja cerrada sola se reconoce por su evento de auditoría (así sigue marcada después de conciliarla)
+    // o, en cierres antiguos sin ese evento, por no tener conteo.
+    const autoClosedIds = new Set<number>();
+    if (rows.length > 0) {
+      const events = await db
+        .select({ entityId: schema.auditLogs.entityId })
+        .from(schema.auditLogs)
+        .where(and(eq(schema.auditLogs.action, 'cash-session:auto-closed'), inArray(schema.auditLogs.entityId, rows.map((r) => r.id))));
+      for (const event of events) if (event.entityId !== null) autoClosedIds.add(event.entityId);
+    }
+
     return rows.map((r) => ({
       id: r.id,
-      autoClosed: r.finalCash === null,
+      autoClosed: r.finalCash === null || autoClosedIds.has(r.id),
+      pendingReconciliation: r.finalCash === null,
       initialCash: r.initialCash,
       finalCash: r.finalCash,
       expectedCash: r.expectedCash,
@@ -198,6 +210,73 @@ export class CashSessionService {
     });
 
     return { finalCash, expectedCash: serverExpected, difference };
+  }
+
+  /**
+   * Concilia un cierre automático: registra el efectivo realmente contado y calcula la diferencia
+   * contra lo esperado. Solo sirve para cierres sin conteo, y una sola vez. El cambio y su auditoría
+   * (quién concilió, cuánto contó y la diferencia) se guardan juntos.
+   */
+  async reconcileAutoClosedSession(
+    sessionId: number,
+    countedCash: number,
+    accountId: number,
+    actorUserId: number,
+    note?: string,
+  ): Promise<CashCloseSummary> {
+    countedCash = roundMoney(countedCash);
+    if (countedCash < 0) {
+      throw new AppError(ErrorCode.VALIDATION, 'El efectivo contado no puede ser negativo.');
+    }
+    const db = getDatabase();
+
+    const [session] = await db
+      .select()
+      .from(schema.cashSessions)
+      .where(and(eq(schema.cashSessions.id, sessionId), eq(schema.cashSessions.accountId, accountId)))
+      .limit(1);
+
+    if (!session || session.status !== 'CLOSED') {
+      throw new AppError(ErrorCode.NOT_FOUND, 'No existe un cierre de caja para conciliar.');
+    }
+    if (session.finalCash !== null) {
+      throw new AppError(ErrorCode.VALIDATION, 'Este cierre ya tiene conteo de efectivo.');
+    }
+
+    const expectedCash = session.expectedCash ?? session.initialCash;
+    const difference = countedCash - expectedCash;
+
+    db.transaction((tx) => {
+      // Solo si sigue sin conteo: dos conciliaciones a la vez no se pisan.
+      const updated = tx
+        .update(schema.cashSessions)
+        .set({ finalCash: countedCash, expectedCash, difference })
+        .where(and(eq(schema.cashSessions.id, sessionId), eq(schema.cashSessions.status, 'CLOSED'), isNull(schema.cashSessions.finalCash)))
+        .run();
+      if (updated.changes === 0) {
+        throw new AppError(ErrorCode.VALIDATION, 'Este cierre ya fue conciliado.');
+      }
+
+      tx.insert(schema.auditLogs)
+        .values({
+          accountId,
+          userId: actorUserId,
+          action: 'cash-session:reconciled',
+          entity: 'CashSession',
+          entityId: sessionId,
+          payload: JSON.stringify({
+            cashierId: session.userId,
+            countedCash,
+            expectedCash,
+            difference,
+            ...(note ? { note } : {}),
+          }),
+          createdAt: nowISO(),
+        })
+        .run();
+    });
+
+    return { finalCash: countedCash, expectedCash, difference };
   }
 
   async touchActivity(userId: number, branchId?: number): Promise<void> {
