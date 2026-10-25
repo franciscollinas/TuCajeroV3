@@ -24,6 +24,7 @@ import { QuoteService } from '../services/quote.service';
 import { BackupService } from '../services/backup.service';
 import { MigrationService } from '../services/migration.service';
 import { LicenseService } from '../services/license.service';
+import { assertLicenseActive, isGateExempt, resetLicenseGuardCache } from '../services/license-guard';
 import { PrinterService } from '../services/printer.service';
 import { DianService } from '../services/dian.service';
 import { roundMoney } from '../utils/money';
@@ -58,9 +59,16 @@ export const t = initTRPC.context<{ user: AuthUser | null }>().create({
   isServer: true,
 });
 
-const enforceAuth = t.middleware(async ({ ctx, next }) => {
+const enforceAuth = t.middleware(async ({ ctx, next, path }) => {
   if (!ctx.user) {
     throw new TRPCError({ code: 'UNAUTHORIZED', message: 'No autorizado.' });
+  }
+  if (!isGateExempt(path)) {
+    // Se exige aquí, no solo en la pantalla: así no se puede saltar llamando al puente directamente.
+    if (ctx.user.mustChangePassword) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Debes cambiar tu contraseña antes de continuar.' });
+    }
+    await assertLicenseActive();
   }
   return next({ ctx: { user: ctx.user } });
 });
@@ -119,6 +127,14 @@ export const authRouter = t.router({
     .input(z.object({ token: z.string() }))
     .mutation(async ({ input }) => {
       await authService.logout(input.token);
+      return { success: true };
+    }),
+
+  // Cierra todas las sesiones del usuario al cambiarla: hay que iniciar sesión de nuevo.
+  changePassword: authenticatedProcedure
+    .input(z.object({ currentPassword: z.string().min(1).max(200), newPassword: z.string().min(1).max(200) }))
+    .mutation(async ({ input, ctx }) => {
+      await authService.changePassword(ctx.user.id, input.currentPassword, input.newPassword);
       return { success: true };
     }),
 });
@@ -782,7 +798,9 @@ export const licenseRouter = t.router({
   activate: adminOnly
     .input(z.object({ activationKey: z.string() }))
     .mutation(async ({ input }) => {
-      return licenseService.activateLicense(input.activationKey);
+      const result = await licenseService.activateLicense(input.activationKey);
+      resetLicenseGuardCache();
+      return result;
     }),
 });
 

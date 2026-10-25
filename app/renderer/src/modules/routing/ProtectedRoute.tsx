@@ -2,6 +2,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../shared/context/AuthContext';
 import { useLicense } from '../../shared/context/LicenseContext';
 import { es } from '../../shared/i18n';
+import { ForcePasswordChange } from '../auth/ForcePasswordChange';
 import type { UserRole } from '../../shared/types/auth.types';
 
 interface ProtectedRouteProps {
@@ -20,6 +21,11 @@ export function ProtectedRoute({ children, roles }: ProtectedRouteProps): JSX.El
 
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  // La contraseña de fábrica es la misma en todas las instalaciones: no se trabaja hasta cambiarla.
+  if (user.mustChangePassword) {
+    return <ForcePasswordChange />;
   }
 
   if (isBlocked && location.pathname !== '/license') {

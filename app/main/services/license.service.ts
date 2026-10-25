@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm';
 import { getDatabase, schema } from '../db';
 import { nowISO } from '../utils/date';
 import { AppError, ErrorCode } from '../utils/errors';
+import { getAppDataDir, getDatabasePath, isPackagedApp } from '../utils/paths';
 import { resolveLicensePublicKey } from './license-keys';
 import { decodeActivationCode, looksLikeActivationCode } from './license-code';
 
@@ -229,26 +230,75 @@ export class LicenseService {
     return timingSafeEqual(bufA, bufB);
   }
 
-  private async getTrialState(): Promise<LicenseTrialState> {
-    const db = getDatabase();
-    const rows = await db
-      .select()
-      .from(schema.configs)
-      .where(eq(schema.configs.key, 'first_run_at'))
-      .limit(1);
+  // Marca de la prueba fuera de la base de datos: borrar la fila de la base ya no reinicia la prueba.
+  private trialMarkerPath(): string {
+    const base = isPackagedApp() ? getAppDataDir() : path.dirname(getDatabasePath());
+    return path.join(base, 'tucajero-trial.dat');
+  }
 
-    let firstRunDate: string;
-    if (rows[0]) {
-      firstRunDate = rows[0].value;
+  private readTrialMarker(): { firstRunAt?: string; lastSeenAt?: string } {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(this.trialMarkerPath(), 'utf8')) as { firstRunAt?: string; lastSeenAt?: string };
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  private writeTrialMarker(marker: { firstRunAt: string; lastSeenAt: string }): void {
+    try {
+      fs.mkdirSync(path.dirname(this.trialMarkerPath()), { recursive: true });
+      fs.writeFileSync(this.trialMarkerPath(), JSON.stringify(marker), 'utf8');
+    } catch {
+      // Si no se puede escribir, la prueba sigue contándose con la base de datos.
+    }
+  }
+
+  private async readConfigValue(key: string): Promise<string | null> {
+    const rows = await getDatabase().select().from(schema.configs).where(eq(schema.configs.key, key)).limit(1);
+    return rows[0]?.value ?? null;
+  }
+
+  private async writeConfigValue(key: string, value: string): Promise<void> {
+    const db = getDatabase();
+    const existing = await db.select({ id: schema.configs.id }).from(schema.configs).where(eq(schema.configs.key, key)).limit(1);
+    if (existing[0]) {
+      await db.update(schema.configs).set({ value, updatedAt: nowISO() }).where(eq(schema.configs.key, key));
     } else {
-      firstRunDate = nowISO();
-      await db
-        .insert(schema.configs)
-        .values({ key: 'first_run_at', value: firstRunDate, updatedAt: nowISO() });
+      await db.insert(schema.configs).values({ key, value, updatedAt: nowISO() });
+    }
+  }
+
+  private async getTrialState(): Promise<LicenseTrialState> {
+    const marker = this.readTrialMarker();
+    const dbFirstRun = await this.readConfigValue('first_run_at');
+    const dbLastSeen = await this.readConfigValue('trial_last_seen_at');
+
+    // El primer uso es la fecha más antigua entre la base y la marca externa.
+    const firstRunCandidates = [dbFirstRun, marker.firstRunAt].filter((v): v is string => typeof v === 'string' && v.length > 0);
+    const hasInvalidDate = firstRunCandidates.some((v) => Number.isNaN(new Date(v).getTime()));
+    const validFirstRuns = firstRunCandidates.filter((v) => !Number.isNaN(new Date(v).getTime())).sort();
+    const firstRunDate = hasInvalidDate ? firstRunCandidates.find((v) => Number.isNaN(new Date(v).getTime())) as string : (validFirstRuns[0] ?? nowISO());
+
+    // La última fecha vista impide alargar la prueba atrasando el reloj del equipo.
+    const lastSeenMs = Math.max(
+      ...[dbLastSeen, marker.lastSeenAt].map((v) => (v ? new Date(v).getTime() : 0)).filter((n) => Number.isFinite(n)),
+      0,
+    );
+    const effectiveNow = Math.max(Date.now(), lastSeenMs);
+
+    if (!hasInvalidDate) {
+      if (dbFirstRun !== firstRunDate) await this.writeConfigValue('first_run_at', firstRunDate);
+      // Se guarda como máximo una vez por minuto.
+      if (effectiveNow - lastSeenMs > 60 * 1000 || marker.firstRunAt !== firstRunDate) {
+        const seen = new Date(effectiveNow).toISOString();
+        await this.writeConfigValue('trial_last_seen_at', seen);
+        this.writeTrialMarker({ firstRunAt: firstRunDate, lastSeenAt: seen });
+      }
     }
 
     const firstRun = new Date(firstRunDate);
-    const elapsed = Date.now() - firstRun.getTime();
+    const elapsed = effectiveNow - firstRun.getTime();
     const expired = Number.isNaN(firstRun.getTime()) || elapsed >= TRIAL_MS;
 
     if (expired) {

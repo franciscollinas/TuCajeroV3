@@ -5,9 +5,12 @@ import { logger } from '../utils/logger';
 import { toApiError } from '../utils/errors';
 import { getAppDataDir } from '../utils/paths';
 import { downloadUpdate, installUpdate } from '../updater';
-import { resolve, sep } from 'path';
+import { extname, resolve, sep } from 'path';
 
 const ALLOWED_OPEN_DIRS = ['exports', 'invoices', 'build', 'release'];
+
+// Solo documentos que genera la propia app; un ejecutable colocado en esas carpetas no se abre.
+const OPENABLE_EXTENSIONS = new Set(['.xlsx', '.csv', '.pdf', '.txt']);
 
 function isPathAllowed(filePath: string): boolean {
   try {
@@ -25,7 +28,7 @@ function isPathAllowed(filePath: string): boolean {
 const authService = new AuthService();
 
 export const ALLOWED_PROCEDURE_PATHS = new Set<string>([
-  'auth.login', 'auth.validate', 'auth.logout',
+  'auth.login', 'auth.validate', 'auth.logout', 'auth.changePassword',
   'health.check',
   'inventory.getAll', 'inventory.getById', 'inventory.getByBarcode', 'inventory.getCategories',
   'inventory.create', 'inventory.update', 'inventory.delete', 'inventory.adjustStock',
@@ -146,6 +149,10 @@ export function registerIpc(): void {
     if (!isPathAllowed(filePath)) {
       logger.warn({ filePath }, 'Blocked attempt to open file outside allowed directories');
       return { success: false, error: 'Acceso denegado: ruta no permitida' };
+    }
+    if (!OPENABLE_EXTENSIONS.has(extname(filePath).toLowerCase())) {
+      logger.warn({ filePath }, 'Blocked attempt to open a file type that is not allowed');
+      return { success: false, error: 'Acceso denegado: tipo de archivo no permitido' };
     }
     try {
       await shell.openPath(filePath);

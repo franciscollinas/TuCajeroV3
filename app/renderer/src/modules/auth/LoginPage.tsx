@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { User, Lock, Check, AlertTriangle } from 'lucide-react';
 
 import { useAuth } from '../../shared/context/AuthContext';
@@ -9,6 +9,7 @@ import { GrainOverlay } from '../../shared/components/GrainOverlay';
 export function LoginPage(): JSX.Element {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const passwordChanged = (useLocation().state as { passwordChanged?: boolean } | null)?.passwordChanged === true;
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -125,6 +126,13 @@ export function LoginPage(): JSX.Element {
               />
             </div>
           </div>
+
+          {passwordChanged && !error && (
+            <div className="tc-notice tc-notice--success" role="status" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px' }}>
+              <Check size={18} />
+              <span>Contraseña actualizada. Inicia sesión con la nueva.</span>
+            </div>
+          )}
 
           {error && (
             <div
