@@ -1,13 +1,19 @@
 name: Release Windows
 
+# Se publica al crear una etiqueta vX.Y.Z sobre main. No hay disparo manual: una segunda
+# ejecución sobre la misma etiqueta era una de las causas de releases duplicados.
 on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
 
 permissions:
   contents: write
+
+# Una sola publicación por etiqueta a la vez.
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -20,6 +26,15 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: La etiqueta debe coincidir con la versión de package.json
+        shell: bash
+        run: |
+          VERSION="v$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_NAME" != "$VERSION" ]; then
+            echo "La etiqueta $GITHUB_REF_NAME no coincide con package.json ($VERSION). No se publica."
+            exit 1
+          fi
+
       - name: Install dependencies
         run: npm ci
 
@@ -28,6 +43,17 @@ jobs:
 
       - name: Build app
         run: npm run build
+
+      # electron-builder sube el .exe y el .blockmap a la vez y, si el release no existe, cada
+      # subida intenta crearlo: en v3.1.0 salieron dos releases iguales y el instalador quedó en
+      # el que no se abre por la etiqueta. Se crea antes, una sola vez, y el builder lo reutiliza.
+      - name: Crear el release si no existe
+        shell: bash
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --title "${GITHUB_REF_NAME#v}" --notes "TuCajero ${GITHUB_REF_NAME#v}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build installer and publish to GitHub Releases
         run: npx electron-builder --win --publish always

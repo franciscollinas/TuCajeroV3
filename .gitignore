@@ -29,3 +29,6 @@ repro2.ts
 exports/
 backups/
 router-test2.cjs
+
+# Informe que genera la prueba de estrés en cada ejecución
+tests/STRESS_REPORT.md
