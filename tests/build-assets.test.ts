@@ -22,6 +22,28 @@ describe('icono de la aplicación', () => {
     expect(sizes).toContain(256);
   });
 
+  it('trae todos los tamaños y los pequeños son imágenes clásicas (las que entienden todas las herramientas)', () => {
+    const bytes = readFileSync(icon);
+    const count = bytes.readUInt16LE(4);
+    const pngSignature = '89504e47';
+    for (let i = 0; i < count; i++) {
+      const entry = 6 + i * 16;
+      const size = bytes[entry] || 256;
+      const offset = bytes.readUInt32LE(entry + 12);
+      const isPng = bytes.subarray(offset, offset + 4).toString('hex') === pngSignature;
+      expect(isPng).toBe(size === 256);
+    }
+    const sizes = Array.from({ length: count }, (_, i) => bytes[6 + i * 16] || 256);
+    expect(sizes).toEqual(expect.arrayContaining([16, 24, 32, 48, 64, 128, 256]));
+  });
+
+  it('el icono de la interfaz y el del instalador son el mismo archivo, y el logo oficial está guardado', () => {
+    expect(readFileSync(resolve('app/renderer/public/icon.ico')).equals(readFileSync(icon))).toBe(true);
+    const logo = readFileSync(resolve('branding/logo-oficial.png'));
+    expect(logo.subarray(1, 4).toString()).toBe('PNG');
+    expect(logo.readUInt32BE(16)).toBeGreaterThanOrEqual(512);
+  });
+
   it('está en el repositorio (no ignorado por git)', () => {
     if (!existsSync(resolve('.git'))) return; // copia sin historial: nada que comprobar
     expect(() => execSync('git ls-files --error-unmatch build/icon.ico', { stdio: 'pipe' })).not.toThrow();

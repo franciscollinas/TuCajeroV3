@@ -27,7 +27,7 @@ export const AboutModal = memo(function AboutModal({ open, onClose }: AboutModal
           <button onClick={onClose} className="absolute top-3 right-3 bg-white/20 border-none rounded-full w-8 h-8 flex items-center justify-center text-white cursor-pointer hover:bg-white/30">
             <X size={16} />
           </button>
-          <div className="w-20 h-20 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center mx-auto mb-4 border-2 border-white/25">
+          <div className="w-20 h-20 rounded-xl bg-white flex items-center justify-center mx-auto mb-4 border-2 border-white/60 shadow-lg">
             <img src="/isotipo.png" alt="TuCajero" className="w-14 h-14 object-contain" />
           </div>
           <h2 className="text-2xl font-extrabold m-0">TuCajero</h2>
