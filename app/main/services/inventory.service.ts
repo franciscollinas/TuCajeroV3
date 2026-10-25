@@ -1071,20 +1071,25 @@ if (created && csvStock > 0) {
     const db = getDatabase();
     const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-    const soldProductIds = db
-      .select({ productId: schema.saleItems.productId })
+    // Una sola consulta con la última venta completada de cada producto (antes se hacía una
+    // consulta por producto sin rotación, y con miles de productos cada llamada tardaba cientos de ms).
+    const lastSales = await db
+      .select({
+        productId: schema.saleItems.productId,
+        lastSale: sql<string>`max(${schema.sales.createdAt})`,
+      })
       .from(schema.saleItems)
       .innerJoin(schema.sales, eq(schema.saleItems.saleId, schema.sales.id))
       .where(
         and(
           eq(schema.sales.status, 'COMPLETED'),
-          gte(schema.sales.createdAt, cutoff),
           ...(accountId ? [eq(schema.sales.accountId, accountId)] : []),
         ),
       )
-      .as('sold');
+      .groupBy(schema.saleItems.productId);
+    const lastSaleByProduct = new Map(lastSales.map((r) => [r.productId, r.lastSale]));
 
-    const rows = await db
+    const products = await db
       .select({
         id: schema.products.id,
         code: schema.products.code,
@@ -1095,45 +1100,33 @@ if (created && csvStock > 0) {
         createdAt: schema.products.createdAt,
       })
       .from(schema.products)
-      .leftJoin(soldProductIds, eq(schema.products.id, soldProductIds.productId))
       .where(
         and(
           eq(schema.products.isActive, true),
           ...(accountId ? [eq(schema.products.accountId, accountId)] : []),
           gt(schema.products.stock, 0),
-          sql`${soldProductIds.productId} IS NULL`,
         ),
       )
       .orderBy(asc(schema.products.name));
 
-    const lastSaleDates = await Promise.all(
-      rows.map(async (row) => {
-        const [lastSale] = await db
-          .select({ createdAt: schema.sales.createdAt })
-          .from(schema.saleItems)
-          .innerJoin(schema.sales, eq(schema.saleItems.saleId, schema.sales.id))
-          .where(
-            and(
-              eq(schema.saleItems.productId, row.id),
-              eq(schema.sales.status, 'COMPLETED'),
-            ),
-          )
-          .orderBy(desc(schema.sales.createdAt))
-          .limit(1);
+    // Sin rotación: nunca se vendió o su última venta es anterior al plazo.
+    const rows = products.filter((p) => {
+      const last = lastSaleByProduct.get(p.id);
+      return !last || last < cutoff;
+    });
 
-        return lastSale?.createdAt ?? null;
-      }),
-    );
-
-    return rows.map((row, i) => ({
-      ...row,
-      stock: Number(row.stock),
-      price: Number(row.price),
-      cost: Number(row.cost),
-      lastSaleDate: lastSaleDates[i],
-      daysWithoutSale: lastSaleDates[i]
-        ? Math.floor((Date.now() - new Date(lastSaleDates[i]).getTime()) / (1000 * 60 * 60 * 24))
-        : Math.floor((Date.now() - new Date(row.createdAt).getTime()) / (1000 * 60 * 60 * 24)),
-    }));
+    return rows.map((row) => {
+      const lastSaleDate = lastSaleByProduct.get(row.id) ?? null;
+      return {
+        ...row,
+        stock: Number(row.stock),
+        price: Number(row.price),
+        cost: Number(row.cost),
+        lastSaleDate,
+        daysWithoutSale: Math.floor(
+          (Date.now() - new Date(lastSaleDate ?? row.createdAt).getTime()) / (1000 * 60 * 60 * 24),
+        ),
+      };
+    });
   }
 }
