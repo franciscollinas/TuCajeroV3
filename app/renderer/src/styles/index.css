@@ -298,6 +298,20 @@ body {
   content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
   background: linear-gradient(180deg, var(--aurora-blue), var(--aurora-violet), var(--aurora-aqua));
 }
+/* Tabla compacta y columna de acciones fija a la derecha: en una ventana angosta las acciones
+   siguen a la vista mientras el resto de la tabla se desplaza. */
+.tc-table-wrap.tc-table--compact th,
+.tc-table-wrap.tc-table--compact td { padding: 12px 14px; }
+.tc-table th.tc-col-sticky-end,
+.tc-table td.tc-col-sticky-end {
+  position: sticky; right: 0; background: #fff;
+  box-shadow: -10px 0 10px -10px rgba(15, 23, 42, 0.14);
+}
+.tc-table th.tc-col-sticky-end { z-index: 3; background: var(--gray-50); }
+.tc-table tbody tr:hover td.tc-col-sticky-end,
+.tc-table tr.tc-row-selected td.tc-col-sticky-end {
+  background: linear-gradient(rgba(134, 173, 255, 0.10), rgba(134, 173, 255, 0.10)), #fff;
+}
 .tc-table tr.tc-row-error td { background: #fef3f2; }
 .tc-table tr.tc-row-selected td { background: rgba(134, 173, 255, 0.15); }
 
