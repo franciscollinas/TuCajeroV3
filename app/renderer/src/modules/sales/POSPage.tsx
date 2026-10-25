@@ -11,6 +11,7 @@ import { rendererLogger } from '../../shared/utils/rendererLogger';
 import { useAuth } from '../../shared/context/AuthContext';
 import { formatCurrency } from '../../shared/utils/formatters';
 import { computeCartTotals, quickCashAmounts } from '../../shared/utils/cart-totals';
+import { formatExpiryDate, isProductExpired } from '../../shared/utils/product-status';
 import { useBarcodeScanner } from '../../shared/hooks/useBarcodeScanner';
 import type { Product } from '../../shared/types/inventory.types';
 import type { CashRegister } from '../../shared/types/cash.types';
@@ -40,27 +41,32 @@ const ProductCard = memo(function ProductCard({
   onAdd: (product: Product) => void;
 }): JSX.Element {
   const outOfStock = product.stock <= 0;
+  // Un producto vencido no se puede elegir: antes se agregaba al carrito y el cobro lo rechazaba.
+  const expired = isProductExpired(product.expiryDate);
+  const blocked = outOfStock || expired;
+  const expiredText = expired && product.expiryDate ? `Vencido el ${formatExpiryDate(product.expiryDate)}` : '';
   // Solo se avisa cuando queda poco: con el stock normal el cajero necesita nombre y precio.
-  const lowStock = !outOfStock && product.stock <= Math.max(product.minStock || 0, 5);
+  const lowStock = !blocked && product.stock <= Math.max(product.minStock || 0, 5);
   return (
     <div
       role="button"
-      tabIndex={outOfStock ? -1 : 0}
-      onClick={() => !outOfStock && onAdd(product)}
-      onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !outOfStock) { e.preventDefault(); onAdd(product); } }}
-      aria-label={`${product.name}, ${formatCurrency(product.price)}, ${outOfStock ? 'Sin stock' : `Stock: ${product.stock}`}`}
+      tabIndex={blocked ? -1 : 0}
+      onClick={() => !blocked && onAdd(product)}
+      onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !blocked) { e.preventDefault(); onAdd(product); } }}
+      aria-label={`${product.name}, ${formatCurrency(product.price)}, ${expired ? expiredText : outOfStock ? 'Sin stock' : `Stock: ${product.stock}`}`}
       className="tc-card tc-glow-hover animate-slideUp"
-      aria-disabled={outOfStock}
+      aria-disabled={blocked}
+      title={expiredText || undefined}
       style={{
-        cursor: outOfStock ? 'not-allowed' : 'pointer',
-        opacity: outOfStock ? 0.55 : 1,
+        cursor: blocked ? 'not-allowed' : 'pointer',
+        opacity: blocked ? 0.55 : 1,
         padding: 0,
         border: '2px solid transparent',
                 position: 'relative',
         overflow: 'hidden',
       }}
     >
-      {outOfStock && (
+      {blocked && (
         <div
           style={{
             position: 'absolute', inset: 0,
@@ -73,14 +79,16 @@ const ProductCard = memo(function ProductCard({
         <p style={{ margin: 0, fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--gray-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {product.category?.name || 'Varios'}
         </p>
-        <h4 style={{ margin: 0, flex: 1, fontWeight: 700, lineHeight: 1.3, color: outOfStock ? 'var(--gray-400)' : 'var(--gray-800)', fontSize: 'var(--text-sm)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+        <h4 style={{ margin: 0, flex: 1, fontWeight: 700, lineHeight: 1.3, color: blocked ? 'var(--gray-400)' : 'var(--gray-800)', fontSize: 'var(--text-sm)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
           {product.name}
         </h4>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <span style={{ color: outOfStock ? 'var(--gray-400)' : 'var(--brand-600)', fontWeight: 800, fontSize: 'var(--text-base)', fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ color: blocked ? 'var(--gray-400)' : 'var(--brand-600)', fontWeight: 800, fontSize: 'var(--text-base)', fontVariantNumeric: 'tabular-nums' }}>
             {formatCurrency(product.price)}
           </span>
-          {outOfStock ? (
+          {expired ? (
+            <span className="tc-badge tc-badge--danger" style={{ whiteSpace: 'nowrap' }}>Vencido</span>
+          ) : outOfStock ? (
             <span className="tc-badge tc-badge--danger" style={{ whiteSpace: 'nowrap' }}>Sin stock</span>
           ) : lowStock ? (
             <span className="tc-badge tc-badge--warning" style={{ whiteSpace: 'nowrap' }}>Quedan {product.stock}</span>
@@ -162,12 +170,18 @@ export function POSPage(): JSX.Element {
   const [customerCreateName, setCustomerCreateName] = useState('');
   const [customerCreatePhone, setCustomerCreatePhone] = useState('');
 
-  const addToCart = useCallback((product: Product): void => {
+  const addToCart = useCallback((product: Product): boolean => {
+    if (isProductExpired(product.expiryDate)) {
+      setMessageType('error');
+      setMessage(`"${product.name}" está vencido y no se puede vender.`);
+      setTimeout(() => setMessage(''), 3000);
+      return false;
+    }
     if (product.stock <= 0) {
       setMessageType('error');
       setMessage(`"${product.name}" no tiene stock disponible.`);
       setTimeout(() => setMessage(''), 3000);
-      return;
+      return false;
     }
     setCart((prev) => {
       const idx = prev.findIndex((item) => item.product.id === product.id);
@@ -178,6 +192,7 @@ export function POSPage(): JSX.Element {
       }
       return [...prev, { product, quantity: 1, unitPrice: product.price, discount: 0 }];
     });
+    return true;
   }, []);
 
   const updateCartQty = (productId: number, delta: number): void => {
@@ -217,10 +232,11 @@ export function POSPage(): JSX.Element {
 
   useEffect(() => {
     if (scanner.product) {
-      addToCart(scanner.product);
-      setMessageType('success');
-      setMessage(`${scanner.product.name} agregado (código de barras)`);
-      setTimeout(() => setMessage(''), 2500);
+      if (addToCart(scanner.product)) {
+        setMessageType('success');
+        setMessage(`${scanner.product.name} agregado (código de barras)`);
+        setTimeout(() => setMessage(''), 2500);
+      }
       scanner.reset();
     }
   }, [scanner.product, addToCart, scanner]);
@@ -330,9 +346,10 @@ export function POSPage(): JSX.Element {
       ? [exact]
       : products.filter((p) => p.name.toLowerCase().includes(term) || p.code.toLowerCase().includes(term) || p.barcode?.toLowerCase().includes(term));
     if (matches.length === 1) {
-      addToCart(matches[0]);
-      setSearchTerm('');
-      setDebouncedSearch('');
+      if (addToCart(matches[0])) {
+        setSearchTerm('');
+        setDebouncedSearch('');
+      }
     } else if (matches.length === 0) {
       setMessageType('error');
       setMessage(`No hay productos que coincidan con "${searchTerm.trim()}".`);
