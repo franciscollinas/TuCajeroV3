@@ -6,7 +6,7 @@ import bcrypt from 'bcryptjs';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const dir = join(tmpdir(), `tucajero-security-${Date.now()}`);
 process.env.DATABASE_URL = join(dir, 'test.db');
@@ -33,6 +33,13 @@ const serviceDescribe = nativeDbAvailable ? describe : describe.skip;
 const NOW = '2026-01-01T00:00:00.000Z';
 const HOUR = 3600 * 1000;
 const licenses = new LicenseService();
+
+// La huella real consulta el hardware (CPU, disco, red) y en el servidor de CI tarda más que el tiempo
+// de las pruebas: aquí no se prueba el hardware sino que la licencia se exija, así que es fija.
+const FAKE_FINGERPRINT = 'a1'.repeat(32);
+vi.spyOn(LicenseService.prototype, 'generateFingerprint').mockResolvedValue({
+  cpuInfo: 'cpu', diskSerial: 'disco', macAddress: 'mac', hostname: 'equipo', fingerprint: FAKE_FINGERPRINT,
+});
 
 const caller = (mustChangePassword = false) =>
   appRouter.createCaller({
