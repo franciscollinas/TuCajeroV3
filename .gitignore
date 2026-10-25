@@ -7,6 +7,8 @@ build/
 *.db-wal
 *.db-shm
 *.db.bak
+# Marca local de la prueba gratuita (la crea el servicio de licencias junto a la base)
+tucajero-trial.dat
 .env
 .env.local
 *.log

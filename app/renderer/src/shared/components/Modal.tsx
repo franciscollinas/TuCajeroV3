@@ -64,14 +64,14 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md', c
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-md animate-fadeIn p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center tc-overlay-glass animate-fadeIn p-4"
       role="dialog"
       aria-modal="true"
       aria-label={title || 'Diálogo'}
     >
       <div
         ref={modalRef}
-        className={`tc-card animate-scaleIn ${className}`}
+        className={`tc-card tc-aurora-frame animate-scaleIn ${className}`}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
         tabIndex={-1}

@@ -54,7 +54,7 @@ export function LoginPage(): JSX.Element {
       <div style={{ position: 'absolute', bottom: '-12%', right: '-8%', width: 420, height: 420, background: 'var(--gradient-amber)', opacity: 0.10, borderRadius: '50%', filter: 'blur(20px)', pointerEvents: 'none' }} />
 
       <div
-        className="tc-card tc-stagger"
+        className="tc-card tc-stagger tc-aurora-frame"
         style={{
           width: 'min(440px, 100%)',
           padding: '40px',
