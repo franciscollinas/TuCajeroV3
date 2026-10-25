@@ -278,11 +278,12 @@ export default function InventoryPage(): JSX.Element {
     {
       key: 'code',
       header: es.inventory.code,
-      className: 'font-mono text-xs',
+      className: 'font-mono text-xs whitespace-nowrap',
     },
     {
       key: 'name',
       header: es.inventory.name,
+      className: 'min-w-[170px]',
       render: (p) => (
         <div>
           <span className="font-medium text-gray-900">{p.name}</span>
@@ -293,6 +294,7 @@ export default function InventoryPage(): JSX.Element {
     {
       key: 'category',
       header: es.inventory.category,
+      className: 'whitespace-nowrap',
       render: (p) => (
         <span
           className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium"
@@ -306,6 +308,7 @@ export default function InventoryPage(): JSX.Element {
     {
       key: 'stock',
       header: es.inventory.stock,
+      className: 'whitespace-nowrap',
       render: (p) => (
         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${getStockBadgeClasses(p.stock, p.minStock, p.criticalStock)}`}>
           <Box size={13} />
@@ -317,16 +320,19 @@ export default function InventoryPage(): JSX.Element {
     {
       key: 'price',
       header: es.inventory.price,
+      className: 'whitespace-nowrap',
       render: (p) => <span className="font-medium">{formatCurrency(p.price)}</span>,
     },
     {
       key: 'cost',
       header: es.inventory.cost,
+      className: 'whitespace-nowrap hidden xl:table-cell',
       render: (p) => <span className="text-gray-500">{formatCurrency(p.cost)}</span>,
     },
     {
       key: 'expiryDate',
       header: es.inventory.expiryDate,
+      className: 'whitespace-nowrap',
       render: (p) => p.expiryDate ? (
         <span className={`text-xs ${new Date(p.expiryDate) < new Date() ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
           {formatDate(p.expiryDate)}
@@ -336,7 +342,7 @@ export default function InventoryPage(): JSX.Element {
     {
       key: 'actions',
       header: es.inventory.actions,
-      className: 'text-right',
+      className: 'text-right tc-col-sticky-end',
       render: (p) => (
         <div className="flex items-center justify-end gap-1">
           <button
@@ -554,6 +560,7 @@ export default function InventoryPage(): JSX.Element {
         ) : (
           <>
             <DataTable
+              className="tc-table--compact"
               columns={columns}
               data={products}
               keyExtractor={(p) => p.id}
