@@ -108,7 +108,7 @@ serviceDescribe('gráficos del inicio (semana y 30 días)', () => {
   it('con miles de ventas recientes responde en tiempo razonable (no formatea fechas por venta)', async () => {
     const columns = (sqlite.prepare('pragma table_info("Sale")').all() as Array<{ name: string }>).map((c) => c.name).filter((n) => n !== 'id');
     const select = columns
-      .map((c) => (c === 'saleNumber' ? `'BULK-' || n.i` : c === 'createdAt' ? `strftime('%Y-%m-%dT12:00:00.000Z', 'now', '-' || (n.i % 25) || ' days')` : `t."${c}"`))
+      .map((c) => (c === 'saleNumber' ? `'BULK-' || n.i` : c === 'createdAt' ? `strftime('%Y-%m-%dT12:00:00.000Z', 'now', '-' || (1 + n.i % 25) || ' days')` : `t."${c}"`))
       .join(', ');
     sqlite.exec(`
       WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 9000)
