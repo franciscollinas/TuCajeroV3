@@ -1,7 +1,8 @@
 import { app, BrowserWindow, Menu, session, dialog } from 'electron';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import { registerIpc } from './router/ipc-bridge';
+import { MigrationService } from './services/migration.service';
 import { setupAutoUpdater } from './updater';
 import { getDatabase, closeDatabase, setBeforeUpgradeHook, consumeRecoveryNotice } from './db';
 import { BackupService } from './services/backup.service';
@@ -179,6 +180,92 @@ function runAutoBackup(): void {
     .catch((err) => logger.error({ err }, 'Falló la copia automática de la base de datos'));
 }
 
+const peso = (value: number): string => new Intl.NumberFormat('es-CO').format(value);
+
+/**
+ * Primera vez que se abre V3 en un equipo que tenía TuCajero V2: ofrece traer los datos. Se hace antes de crear
+ * los usuarios de fábrica, así el cliente entra con su usuario y su clave de siempre. La base de V2 solo se
+ * lee (queda intacta) y, antes de dar la importación por buena, se comprueba que no falte nada.
+ * TUCAJERO_V2_IMPORT=si|no responde sin preguntar (instalaciones automáticas y pruebas).
+ */
+async function offerV2Import(): Promise<void> {
+  const mode = process.env.TUCAJERO_V2_IMPORT;
+  if (isDev && !mode) return;
+  const declinedMarker = path.join(app.getPath('userData'), 'v2-import-declined.txt');
+  if (existsSync(declinedMarker)) return;
+
+  const service = new MigrationService();
+  const found = service.detectV2();
+  if (!found.available || !found.path) return;
+
+  let accept: boolean;
+  if (mode === 'si' || mode === 'no') {
+    accept = mode === 'si';
+  } else {
+    const s = found.summary;
+    const content = s
+      ? `Se encontraron ${peso(s.sales)} ventas, ${peso(s.products)} productos y ${peso(s.customers)} clientes` +
+        (s.firstSale && s.lastSale ? ` (del ${s.firstSale} al ${s.lastSale}).` : '.')
+      : 'Se encontró una base de datos de la versión anterior.';
+    const { response } = await dialog.showMessageBox({
+      type: 'question',
+      title: 'Importar datos de tu TuCajero anterior',
+      message: 'Encontramos los datos de tu TuCajero anterior. ¿Quieres traerlos a esta versión?',
+      detail:
+        `${content}\n\nTus datos antiguos no se tocan: quedan intactos donde estaban y además se guarda una copia de seguridad. ` +
+        'Antes de dar la importación por buena se comprueba que no falte nada; si algo no coincide, no se importa y todo queda como estaba.',
+      buttons: ['Importar mis datos', 'Empezar sin datos antiguos'],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    });
+    accept = response === 0;
+  }
+
+  if (!accept) {
+    writeFileSync(declinedMarker, `Se eligió empezar sin los datos de V2 el ${new Date().toISOString()}\n`);
+    logger.info('El usuario eligió no importar los datos de V2');
+    return;
+  }
+
+  try {
+    const report = await service.migrateV2();
+    logger.info({ rows: report.rows, corrections: report.corrections?.length ?? 0, backup: report.backupPath }, 'Datos de V2 importados');
+    if (mode) return;
+    const corrections = report.corrections ?? [];
+    await dialog.showMessageBox({
+      type: 'info',
+      title: 'Datos importados',
+      message: 'Tus datos se importaron y se comprobó que coinciden con los de antes.',
+      detail:
+        `Ventas: ${peso(report.rows.Sale ?? 0)}\nProductos: ${peso(report.rows.Product ?? 0)}\nClientes: ${peso(report.rows.Customer ?? 0)}\n` +
+        `Cierres de caja: ${peso(report.rows.CashSession ?? 0)}\n\n` +
+        'Entra con el mismo usuario y la misma clave de antes (se te pedirá cambiarla).\n' +
+        (corrections.length > 0
+          ? `\nAtención: ${corrections.length} cifra(s) de un cierre de caja tenían un valor imposible (error al digitar). ` +
+            'Ese cierre quedó «sin conteo»: en Caja puedes corregirlo con «Conciliar». El valor original quedó en la auditoría.\n'
+          : '') +
+        `\nCopia de seguridad de tus datos antiguos:\n${report.backupPath}`,
+      buttons: ['Entendido'],
+      noLink: true,
+    });
+  } catch (err) {
+    logger.error({ err }, 'No se pudieron importar los datos de V2');
+    if (mode) return;
+    await dialog.showMessageBox({
+      type: 'error',
+      title: 'No se importaron los datos',
+      message: 'No se pudieron importar los datos de tu TuCajero anterior. No se perdió nada.',
+      detail:
+        'Tus datos antiguos siguen intactos donde estaban y la aplicación se abrirá sin ellos. ' +
+        'Cierra la aplicación y avísale a quien te la instaló, mostrándole este mensaje:\n\n' +
+        (err instanceof Error ? err.message : String(err)),
+      buttons: ['Entendido'],
+      noLink: true,
+    });
+  }
+}
+
 function startAutoBackups(): void {
   const first = setTimeout(runAutoBackup, AUTO_BACKUP_DELAY_MS);
   first.unref();
@@ -198,6 +285,8 @@ app.whenReady().then(async () => {
     // Initialize database on startup
     getDatabase();
     logger.info('Database initialized');
+    // Un fallo aquí no debe impedir abrir la aplicación: se registra y se sigue.
+    await offerV2Import().catch((err) => logger.error({ err }, 'Falló la oferta de importar los datos de V2'));
     await ensureBootstrap();
 
     // Genera (si falta) el log diario de auditoría de los días ya terminados.

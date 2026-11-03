@@ -718,7 +718,7 @@ export default function CashRegisterPage(): JSX.Element {
                   <div role="status" className="flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
                     <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
                     <span>
-                      {pendingClosures.length === 1 ? '1 cierre automático sin contar' : `${pendingClosures.length} cierres automáticos sin contar`}.
+                      {pendingClosures.length === 1 ? '1 cierre sin contar' : `${pendingClosures.length} cierres sin contar`}.
                       {canReconcile ? ' Cuenta el efectivo y concílialo para saber si cuadra.' : ' Un administrador debe contar el efectivo.'}
                     </span>
                   </div>
@@ -789,7 +789,7 @@ export default function CashRegisterPage(): JSX.Element {
           return (
             <div className="space-y-4">
               <p className="text-sm text-gray-600">
-                La caja de <strong>{reconcileTarget.user.fullName}</strong> se cerró sola el {formatDateTime(reconcileTarget.closedAt)} por inactividad, sin contar el efectivo.
+                La caja de <strong>{reconcileTarget.user.fullName}</strong> se cerró el {formatDateTime(reconcileTarget.closedAt)} sin que quedara registrado el efectivo contado (se cerró sola por inactividad, o el conteo guardado no era válido).
               </p>
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg text-sm">
                 <span className="text-gray-500">Efectivo esperado</span>
