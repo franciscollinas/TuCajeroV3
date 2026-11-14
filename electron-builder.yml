@@ -1,8 +1,8 @@
-# Identidad PROPIA de V3, distinta de la de TuCajero V2 (appId com.tucajero.pos, nombre TuCajero).
-# El instalador decide qué programa reemplaza por el appId: con el mismo, instalar V3 desinstalaba V2.
-# Con identidad propia, V3 se instala en su propia carpeta ("TuCajero V3") y V2 sigue intacto y usable.
-appId: com.tucajero.pos.v3
-productName: TuCajero V3
+# Identidad PROPIA de la versión LITE, distinta de TuCajero V2 (com.tucajero.pos) y de TuCajero V3 (com.tucajero.pos.v3).
+# El instalador decide qué programa reemplaza por el appId: con uno propio, la Lite se instala en su carpeta
+# ("TuCajero Lite") y no toca a V2 ni a V3. Sus datos van a %APPDATA%	ucajero-lite (nombre del paquete).
+appId: com.tucajero.pos.lite
+productName: TuCajero Lite
 directories:
   output: release
   buildResources: build
@@ -30,14 +30,14 @@ win:
   target:
     - nsis
   # Nombre fijo (sin espacios) para que el enlace de descarga y latest.yml no cambien con el nombre del producto.
-  artifactName: TuCajero-Setup-${version}.${ext}
+  artifactName: TuCajero-Lite-Setup-${version}.${ext}
   icon: build/icon.ico
 
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
-  shortcutName: TuCajero V3
+  shortcutName: TuCajero Lite
   createStartMenuShortcut: true
   deleteAppDataOnUninstall: false
 
@@ -46,6 +46,8 @@ publish:
   owner: franciscollinas
   repo: TuCajeroV3
   releaseType: release
+  # Canal propio: la Lite solo se actualiza con lite.yml, nunca con las versiones normales de V3.
+  channel: lite
   private: false
 
 compression: maximum
