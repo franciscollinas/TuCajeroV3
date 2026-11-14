@@ -1,5 +1,8 @@
-appId: com.tucajero.pos
-productName: TuCajero
+# Identidad PROPIA de V3, distinta de la de TuCajero V2 (appId com.tucajero.pos, nombre TuCajero).
+# El instalador decide qué programa reemplaza por el appId: con el mismo, instalar V3 desinstalaba V2.
+# Con identidad propia, V3 se instala en su propia carpeta ("TuCajero V3") y V2 sigue intacto y usable.
+appId: com.tucajero.pos.v3
+productName: TuCajero V3
 directories:
   output: release
   buildResources: build
@@ -26,14 +29,15 @@ asarUnpack:
 win:
   target:
     - nsis
-  artifactName: ${productName}-Setup-${version}.${ext}
+  # Nombre fijo (sin espacios) para que el enlace de descarga y latest.yml no cambien con el nombre del producto.
+  artifactName: TuCajero-Setup-${version}.${ext}
   icon: build/icon.ico
 
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
-  shortcutName: TuCajero
+  shortcutName: TuCajero V3
   createStartMenuShortcut: true
   deleteAppDataOnUninstall: false
 
