@@ -182,11 +182,10 @@ export default function CashRegisterPage(): JSX.Element {
       const diff = Date.now() - new Date(session.openedAt).getTime();
       const h = Math.floor(diff / 3600000);
       const m = Math.floor((diff % 3600000) / 60000);
-      const s = Math.floor((diff % 60000) / 1000);
-      setSessionDuration(`${h}h ${m.toString().padStart(2, '0')}m ${s.toString().padStart(2, '0')}s`);
+      setSessionDuration(`${h}h ${m.toString().padStart(2, '0')}m`);
     };
     update();
-    const timer = setInterval(update, 1000);
+    const timer = setInterval(update, 30000);
     return () => clearInterval(timer);
   }, [session]);
 
@@ -364,7 +363,7 @@ export default function CashRegisterPage(): JSX.Element {
     ...(canReconcile ? [{
       key: 'reconcile', header: '',
       render: (row: CashClosureRow) => row.pendingReconciliation
-        ? <button type="button" onClick={() => openReconcile(row)} className="px-2.5 py-1 text-xs font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-lg transition-colors">Conciliar</button>
+        ? <button type="button" onClick={() => openReconcile(row)} className="px-2.5 py-1 text-xs font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-lg">Conciliar</button>
         : null,
     }] : []),
   ];
@@ -372,7 +371,7 @@ export default function CashRegisterPage(): JSX.Element {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+        <div className="rounded-full h-8 w-8 border-b-2 border-indigo-600" />
       </div>
     );
   }
@@ -526,7 +525,7 @@ export default function CashRegisterPage(): JSX.Element {
                     <button
                       type="button"
                       onClick={() => setShowAddExpense(true)}
-                      className="tc-aurora-hover inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg"
                     >
                       <Plus size={14} />
                       Registrar egreso
@@ -691,7 +690,7 @@ export default function CashRegisterPage(): JSX.Element {
                 <button
                   type="button"
                   onClick={() => setShowAddExpense(true)}
-                  className="tc-aurora-hover w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-lg"
                 >
                   <Plus size={16} className="text-red-500" />
                   Registrar egreso
@@ -699,7 +698,7 @@ export default function CashRegisterPage(): JSX.Element {
                 <button
                   type="button"
                   onClick={() => setShowClosures(true)}
-                  className="tc-aurora-hover w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-lg"
                 >
                   <History size={16} className="text-indigo-500" />
                   Historial de cierres
@@ -734,7 +733,7 @@ export default function CashRegisterPage(): JSX.Element {
                         <StatusBadge status="warning" variant="warning" label="Cierre automático" />
                         <p className="text-xs text-gray-400 mt-1">Esperado {formatCurrency(c.expectedCash ?? c.initialCash)}</p>
                         {canReconcile && (
-                          <button type="button" onClick={() => openReconcile(c)} className="mt-1 px-2.5 py-1 text-xs font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-lg transition-colors">
+                          <button type="button" onClick={() => openReconcile(c)} className="mt-1 px-2.5 py-1 text-xs font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-lg">
                             Conciliar
                           </button>
                         )}
@@ -836,9 +835,9 @@ export default function CashRegisterPage(): JSX.Element {
 
       {/* Closures History Modal */}
       {showClosures && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowClosures(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowClosures(false)}>
           <div
-            className="bg-white rounded-xl max-w-4xl w-[90%] max-h-[90vh] overflow-hidden shadow-2xl flex flex-col"
+            className="bg-white rounded-xl max-w-4xl w-[90%] max-h-[90vh] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
@@ -851,7 +850,7 @@ export default function CashRegisterPage(): JSX.Element {
                   type="button"
                   onClick={() => handleExportClosures('csv')}
                   disabled={exportingClosures}
-                  className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+                  className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50"
                 >
                   CSV
                 </button>
@@ -859,7 +858,7 @@ export default function CashRegisterPage(): JSX.Element {
                   type="button"
                   onClick={() => handleExportClosures('xlsx')}
                   disabled={exportingClosures}
-                  className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-50"
+                  className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg disabled:opacity-50"
                 >
                   XLSX
                 </button>
@@ -887,7 +886,7 @@ export default function CashRegisterPage(): JSX.Element {
               <button
                 type="button"
                 onClick={() => setShowClosures(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg"
               >
                 Cerrar
               </button>

@@ -35,13 +35,13 @@ export function UpdateBanner(): JSX.Element | null {
 
   return (
     <div
-      className="fixed bottom-4 right-4 z-50 w-[360px] max-w-[calc(100vw-2rem)] rounded-xl bg-white shadow-2xl border border-gray-200 overflow-hidden"
-      style={{ animation: 'slideUp 0.3s ease' }}
+      className="fixed bottom-4 right-4 z-50 w-[360px] max-w-[calc(100vw-2rem)] rounded-xl bg-white border border-gray-200 overflow-hidden"
+      style={{ }}
       role="status"
       aria-live="polite"
     >
       <div className="flex items-start gap-3 p-4">
-        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white shrink-0">
+        <div className="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center text-white shrink-0">
           <Download size={18} />
         </div>
         <div className="flex-1 min-w-0">
@@ -52,7 +52,7 @@ export function UpdateBanner(): JSX.Element | null {
               </p>
               <div className="mt-2 h-2 rounded-full bg-gray-100 overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-purple-500 to-indigo-600 transition-all duration-300"
+                  className="h-full bg-indigo-600"
                   style={{ width: `${Math.round(state.percent)}%` }}
                 />
               </div>
@@ -69,7 +69,7 @@ export function UpdateBanner(): JSX.Element | null {
                 <button
                   type="button"
                   onClick={handleRestart}
-                  className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-500 to-indigo-600 text-white text-xs font-bold cursor-pointer border-none hover:opacity-90"
+                  className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold cursor-pointer border-none hover:opacity-90"
                 >
                   {es.updater.restartNow}
                 </button>

@@ -348,7 +348,7 @@ export default function InventoryPage(): JSX.Element {
           <button
             type="button"
             onClick={() => handleOpenAdjust(p)}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+            className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50"
             title={es.inventory.adjustStock}
           >
             <BarChart3 size={15} />
@@ -356,7 +356,7 @@ export default function InventoryPage(): JSX.Element {
           <button
             type="button"
             onClick={() => handleOpenForm(p)}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+            className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50"
             title={es.common.edit}
           >
             <Edit2 size={15} />
@@ -364,7 +364,7 @@ export default function InventoryPage(): JSX.Element {
           <button
             type="button"
             onClick={() => handlePrintLabel(p.id)}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+            className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50"
             title="Imprimir etiqueta"
           >
             <Printer size={15} />
@@ -372,7 +372,7 @@ export default function InventoryPage(): JSX.Element {
           <button
             type="button"
             onClick={() => setDeleteTarget(p)}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50"
             title={es.common.delete}
           >
             <Trash2 size={15} />
@@ -444,7 +444,7 @@ export default function InventoryPage(): JSX.Element {
               type="button"
               onClick={() => handleExport('csv')}
               disabled={exporting}
-              className="tc-aurora-hover inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
             >
               <Download size={16} />
               {exporting ? 'Exportando...' : 'CSV'}
@@ -453,7 +453,7 @@ export default function InventoryPage(): JSX.Element {
               type="button"
               onClick={() => handleExport('xlsx')}
               disabled={exporting}
-              className="tc-aurora-hover inline-flex items-center gap-2 px-4 py-2.5 border border-blue-200 rounded-lg text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-4 py-2.5 border border-blue-200 rounded-lg text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:opacity-50"
             >
               <FileSpreadsheet size={16} />
               {exporting ? 'Exportando...' : 'XLSX'}
@@ -463,7 +463,7 @@ export default function InventoryPage(): JSX.Element {
             type="button"
             onClick={handlePrintAllLabels}
             disabled={printingLabels || products.length === 0}
-            className="tc-aurora-hover inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
           >
             <Printer size={16} />
             {printingLabels ? 'Generando...' : 'Etiquetas'}
@@ -471,7 +471,7 @@ export default function InventoryPage(): JSX.Element {
           <button
             type="button"
             onClick={() => navigate('/inventory/import')}
-            className="tc-aurora-hover inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
           >
             <Upload size={16} />
             {es.inventory.bulkImport}
@@ -790,7 +790,7 @@ export default function InventoryPage(): JSX.Element {
               <button
                 type="button"
                 onClick={() => setAdjustType('entrada')}
-                className={`flex-1 py-2.5 rounded-lg text-sm font-medium border transition-colors cursor-pointer ${
+                className={`flex-1 py-2.5 rounded-lg text-sm font-medium border  cursor-pointer ${
                   adjustType === 'entrada'
                     ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
                     : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
@@ -801,7 +801,7 @@ export default function InventoryPage(): JSX.Element {
               <button
                 type="button"
                 onClick={() => setAdjustType('salida')}
-                className={`flex-1 py-2.5 rounded-lg text-sm font-medium border transition-colors cursor-pointer ${
+                className={`flex-1 py-2.5 rounded-lg text-sm font-medium border  cursor-pointer ${
                   adjustType === 'salida'
                     ? 'bg-red-50 border-red-300 text-red-700'
                     : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'

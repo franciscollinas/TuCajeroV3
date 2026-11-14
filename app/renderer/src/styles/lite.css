@@ -1,0 +1,16 @@
+/* ═══ TuCajero LITE — red de seguridad contra efectos visuales ═══
+   Se carga al final. Los estilos del programa ya no definen animaciones, degradados ni sombras; esta hoja
+   garantiza que tampoco aparezcan desde estilos escritos en línea, desde Tailwind o desde librerías
+   (por ejemplo, las gráficas). Menos trabajo para la tarjeta gráfica = más fluidez en equipos viejos. */
+*, *::before, *::after {
+  animation: none !important;
+  transition: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  mix-blend-mode: normal !important;
+  scroll-behavior: auto !important;
+}
+/* Sin sombra, las ventanas se separan del fondo con un borde. */
+[role='dialog'] { border: 1px solid var(--gray-300); }

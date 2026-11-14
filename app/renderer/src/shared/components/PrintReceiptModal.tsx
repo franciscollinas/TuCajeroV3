@@ -42,12 +42,11 @@ export function PrintReceiptModal({ isOpen, saleNumber, onPrint }: PrintReceiptM
             width: 72,
             height: 72,
             borderRadius: 'var(--radius-2xl)',
-            background: 'linear-gradient(135deg, var(--brand-500), var(--brand-600))',
+            background: 'var(--brand-500)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             boxShadow: '0 8px 24px rgba(99,102,241,0.35)',
-            animation: 'pulse 2s ease-in-out infinite',
           }}
         >
           <Printer size={34} color="#fff" />
@@ -130,7 +129,7 @@ export function PrintReceiptModal({ isOpen, saleNumber, onPrint }: PrintReceiptM
               border: 'none',
               background: printing
                 ? 'var(--success)'
-                : 'linear-gradient(135deg, #10b981, #059669)',
+                : '#10b981',
               color: '#fff',
               fontWeight: 700,
               fontSize: 'var(--text-sm)',
@@ -164,7 +163,6 @@ export function PrintReceiptModal({ isOpen, saleNumber, onPrint }: PrintReceiptM
                     border: '2px solid rgba(255,255,255,0.4)',
                     borderTopColor: '#fff',
                     borderRadius: '50%',
-                    animation: 'spin 0.7s linear infinite',
                     display: 'inline-block',
                   }}
                 />

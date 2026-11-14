@@ -107,22 +107,6 @@ export default function App(): JSX.Element {
                     background: '#f1f5f9',
                   }}
                 >
-                  <div
-                    style={{
-                      width: '40px',
-                      height: '40px',
-                      border: '3px solid #e2e8f0',
-                      borderTop: '3px solid #3b82f6',
-                      borderRadius: '50%',
-                      animation: 'spin 1s linear infinite',
-                    }}
-                  />
-                  <style>{`
-                    @keyframes spin {
-                      0% { transform: rotate(0deg); }
-                      100% { transform: rotate(360deg); }
-                    }
-                  `}</style>
                   <span style={{ fontSize: '14px', color: '#64748b', fontWeight: 500 }}>
                     {es.common.loading}...
                   </span>

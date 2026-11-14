@@ -284,10 +284,10 @@ export default function PurchasePage(): JSX.Element {
       key: 'actions', header: 'Acciones', className: 'text-right',
       render: (s) => (
         <div className="flex justify-end gap-2">
-          <button onClick={() => openEditSupplier(s)} className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar">
+          <button onClick={() => openEditSupplier(s)} className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Editar">
             <Pencil size={15} />
           </button>
-          <button onClick={() => setDeleteSupplierId(s.id)} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar">
+          <button onClick={() => setDeleteSupplierId(s.id)} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Eliminar">
             <Trash2 size={15} />
           </button>
         </div>
@@ -305,11 +305,11 @@ export default function PurchasePage(): JSX.Element {
       key: 'actions', header: 'Acciones', className: 'text-right',
       render: (o) => (
         <div className="flex justify-end gap-2">
-          <button onClick={() => openOrderDetail(o)} className="px-2 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+          <button onClick={() => openOrderDetail(o)} className="px-2 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg">
             Ver
           </button>
           {o.status === 'DRAFT' && (
-            <button onClick={() => setDeleteOrderId(o.id)} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar">
+            <button onClick={() => setDeleteOrderId(o.id)} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Eliminar">
               <Trash2 size={15} />
             </button>
           )}
@@ -329,7 +329,7 @@ export default function PurchasePage(): JSX.Element {
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 p-6 text-white">
+      <div className="relative overflow-hidden rounded-2xl bg-emerald-700 p-6 text-white">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-32 translate-x-32 pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-24 -translate-x-24 pointer-events-none" />
         <div className="relative z-10">
@@ -390,8 +390,8 @@ export default function PurchasePage(): JSX.Element {
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
         <button
           onClick={() => setActiveTab('suppliers')}
-          className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
-            activeTab === 'suppliers' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+          className={`px-5 py-2.5 rounded-lg text-sm font-medium  ${
+            activeTab === 'suppliers' ? 'bg-white text-gray-900 ' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           <Building2 size={16} className="inline mr-1.5" />
@@ -399,8 +399,8 @@ export default function PurchasePage(): JSX.Element {
         </button>
         <button
           onClick={() => setActiveTab('orders')}
-          className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
-            activeTab === 'orders' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+          className={`px-5 py-2.5 rounded-lg text-sm font-medium  ${
+            activeTab === 'orders' ? 'bg-white text-gray-900 ' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           <Truck size={16} className="inline mr-1.5" />
@@ -413,7 +413,7 @@ export default function PurchasePage(): JSX.Element {
         <Card
           title="Proveedores"
           actions={
-            <button onClick={openCreateSupplier} className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors">
+            <button onClick={openCreateSupplier} className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg">
               <Plus size={16} />
               Crear proveedor
             </button>
@@ -432,7 +432,7 @@ export default function PurchasePage(): JSX.Element {
         <Card
           title="Órdenes de compra"
           actions={
-            <button onClick={openCreateOrder} className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors">
+            <button onClick={openCreateOrder} className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg">
               <Plus size={16} />
               Crear pedido
             </button>
@@ -619,7 +619,7 @@ export default function PurchasePage(): JSX.Element {
                       className="w-28 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                       placeholder="Costo"
                     />
-                    <button onClick={() => removeOrderItem(i)} className="p-2 text-gray-400 hover:text-red-500 transition-colors">
+                    <button onClick={() => removeOrderItem(i)} className="p-2 text-gray-400 hover:text-red-500">
                       <XCircle size={18} />
                     </button>
                   </div>

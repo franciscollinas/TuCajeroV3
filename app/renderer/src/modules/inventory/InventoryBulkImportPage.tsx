@@ -242,7 +242,7 @@ export default function InventoryBulkImportPage(): JSX.Element {
           <button
             type="button"
             onClick={() => navigate('/inventory')}
-            className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+            className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
           >
             <ArrowLeft size={20} />
           </button>
@@ -254,7 +254,7 @@ export default function InventoryBulkImportPage(): JSX.Element {
         <button
           type="button"
           onClick={handleDownloadExample}
-          className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
         >
           <Download size={16} />
           {es.inventory.downloadExample}
@@ -268,7 +268,7 @@ export default function InventoryBulkImportPage(): JSX.Element {
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onClick={() => fileInputRef.current?.click()}
-          className={`flex flex-col items-center justify-center py-16 px-6 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
+          className={`flex flex-col items-center justify-center py-16 px-6 border-2 border-dashed rounded-xl cursor-pointer  ${
             dragOver
               ? 'border-blue-500 bg-blue-50'
               : 'border-gray-300 bg-gray-50/50 hover:bg-gray-50 hover:border-gray-400'
