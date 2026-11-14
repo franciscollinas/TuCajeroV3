@@ -319,17 +319,17 @@ export default function BackupPage(): JSX.Element {
                         <button
                           onClick={() => setConfirmRestore(b.id)}
                           disabled={restoring === b.id}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors border-none cursor-pointer disabled:opacity-50"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 border-none cursor-pointer disabled:opacity-50"
                         >
-                          {restoring === b.id ? <RefreshCw size={12} className="animate-spin" /> : <Download size={12} />}
+                          {restoring === b.id ? <RefreshCw size={12} className="" /> : <Download size={12} />}
                           {es.backup.restore}
                         </button>
                         <button
                           onClick={() => setConfirmDelete(b.id)}
                           disabled={deleting === b.id}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors border-none cursor-pointer disabled:opacity-50"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 rounded-lg hover:bg-red-100 border-none cursor-pointer disabled:opacity-50"
                         >
-                          {deleting === b.id ? <RefreshCw size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                          {deleting === b.id ? <RefreshCw size={12} className="" /> : <Trash2 size={12} />}
                           {es.backup.delete}
                         </button>
                       </div>

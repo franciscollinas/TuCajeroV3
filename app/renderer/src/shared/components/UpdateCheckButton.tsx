@@ -54,9 +54,9 @@ export function UpdateCheckButton(): JSX.Element {
         onClick={handleClick}
         disabled={checking}
         aria-busy={checking}
-        className="inline-flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 rounded-lg text-sm font-medium transition-colors disabled:opacity-70 disabled:cursor-wait"
+        className="inline-flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 rounded-lg text-sm font-medium disabled:opacity-70 disabled:cursor-wait"
       >
-        <RefreshCw size={16} className={checking ? 'animate-spin' : ''} />
+        <RefreshCw size={16} className={checking ? '' : ''} />
         {checking ? es.updater.checking : es.updater.checkNow}
       </button>
       {message ? (

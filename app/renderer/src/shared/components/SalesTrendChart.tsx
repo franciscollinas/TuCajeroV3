@@ -29,8 +29,8 @@ export default function SalesTrendChart({ data }: { data: SalesTrendPoint[] }): 
           contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
           formatter={(value: number, name: string) => (name === 'ingresos' ? [formatCurrency(value), 'Ingresos'] : [value, 'Ventas'])}
         />
-        <Bar yAxisId="ingresos" dataKey="ingresos" name="ingresos" fill="#10b981" radius={[4, 4, 0, 0]} />
-        <Line yAxisId="ventas" type="monotone" dataKey="ventas" name="ventas" stroke="#6366f1" strokeWidth={2} dot={{ r: 3, fill: '#6366f1' }} />
+        <Bar isAnimationActive={false} yAxisId="ingresos" dataKey="ingresos" name="ingresos" fill="#10b981" radius={[4, 4, 0, 0]} />
+        <Line isAnimationActive={false} yAxisId="ventas" type="monotone" dataKey="ventas" name="ventas" stroke="#6366f1" strokeWidth={2} dot={{ r: 3, fill: '#6366f1' }} />
       </ComposedChart>
     </ResponsiveContainer>
   );

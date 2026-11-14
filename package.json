@@ -33,9 +33,6 @@
     "typecheck:main": "tsc -p tsconfig.main.json --noEmit"
   },
   "dependencies": {
-    "@fontsource/jetbrains-mono": "^5.2.8",
-    "@fontsource/outfit": "^5.2.8",
-    "@fontsource/sora": "^5.2.8",
     "@trpc/client": "^11.0.0",
     "@trpc/server": "^11.0.0",
     "bcryptjs": "^2.4.3",

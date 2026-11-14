@@ -64,7 +64,7 @@ export function ForcePasswordChange(): JSX.Element {
   };
 
   return (
-    <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: '24px', background: 'linear-gradient(180deg, #f9fafb 0%, #eef2ff 100%)' }}>
+    <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: '24px', background: '#f9fafb' }}>
       <div className="tc-card tc-aurora-frame" style={{ width: 'min(460px, 100%)', padding: '36px', boxShadow: 'var(--shadow-2xl)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
           <div style={{ width: 44, height: 44, borderRadius: 'var(--radius-lg)', background: 'var(--brand-50)', color: 'var(--brand-600)', display: 'grid', placeItems: 'center' }}>

@@ -10,7 +10,6 @@ import { useCashAutoClose } from '../hooks/useCashAutoClose';
 import type { Permission } from '../hooks/useRBAC';
 import { es } from '../i18n';
 import { AboutModal } from './AboutModal';
-import { GrainOverlay } from './GrainOverlay';
 import { UpdateBanner } from './UpdateBanner';
 import { BusinessAvatar } from './BusinessAvatar';
 import { LOGO_URL } from '../utils/assets';
@@ -79,7 +78,6 @@ export function Layout({ children }: LayoutProps): JSX.Element {
   return (
     <div className={`tc-layout ${isCollapsed ? 'tc-layout--collapsed' : ''}`}>
       <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
-      <GrainOverlay />
       <UpdateBanner />
       <a href="#main-content" className="skip-link">Saltar al contenido principal</a>
       <aside className="tc-sidebar" role="navigation" aria-label="Navegación principal">
@@ -200,14 +198,14 @@ function InfoItem({ icon, text }: { icon: string; text: string }) {
 
 const Clock = memo(function Clock(): JSX.Element {
   const [currentTime, setCurrentTime] = useState(new Date());
-  useEffect(() => { const timer = setInterval(() => setCurrentTime(new Date()), 1000); return () => clearInterval(timer); }, []);
+  useEffect(() => { const timer = setInterval(() => setCurrentTime(new Date()), 30000); return () => clearInterval(timer); }, []);
   return (
     <>
       <span style={{ fontSize: 12, color: 'var(--gray-500)', display: 'block' }}>
         {currentTime.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
       </span>
       <span style={{ fontWeight: 700, color: 'var(--gray-700)', fontSize: 15 }}>
-        {currentTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+        {currentTime.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
       </span>
     </>
   );

@@ -144,7 +144,7 @@ export default function BranchPage(): JSX.Element {
         <div className="flex justify-end gap-2">
           <button
             onClick={() => openEdit(b)}
-            className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+            className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
             title="Editar"
           >
             <Pencil size={15} />
@@ -152,7 +152,7 @@ export default function BranchPage(): JSX.Element {
           {b.isActive && (
             <button
               onClick={() => setDeleteId(b.id)}
-              className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
               title="Desactivar"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
@@ -173,7 +173,7 @@ export default function BranchPage(): JSX.Element {
 
   return (
     <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-violet-700 to-purple-800 p-6 text-white">
+      <div className="relative overflow-hidden rounded-2xl bg-violet-700 p-6 text-white">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-32 translate-x-32 pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-24 -translate-x-24 pointer-events-none" />
         <div className="relative z-10">
@@ -187,7 +187,7 @@ export default function BranchPage(): JSX.Element {
         actions={
           <button
             onClick={openCreate}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded-lg transition-colors"
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded-lg"
           >
             <Plus size={16} />
             Nueva sucursal

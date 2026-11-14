@@ -178,7 +178,7 @@ export default function LicensePage(): JSX.Element {
           </code>
           <button
             onClick={handleCopyFingerprint}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors border-none cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 border-none cursor-pointer"
           >
             {copied ? <CheckCircle2 size={14} className="text-emerald-600" /> : <Copy size={14} />}
             {copied ? 'Copiado' : es.license.fingerprintCopy}

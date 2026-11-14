@@ -172,11 +172,11 @@ export default function ReportsPage(): JSX.Element {
           <p className="text-sm text-gray-500">{es.reports.subtitle}</p>
         </div>
         <div className="flex gap-3">
-          <button onClick={() => handleExport('csv')} disabled={!!exporting} className="inline-flex items-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-semibold disabled:opacity-50 border-none cursor-pointer">
+          <button onClick={() => handleExport('csv')} disabled={!!exporting} className="inline-flex items-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-semibold disabled:opacity-50 border-none cursor-pointer">
             {exporting === 'csv' ? <LoadingSpinner size={16} /> : <FileSpreadsheet size={16} />}
             CSV
           </button>
-          <button onClick={() => handleExport('xlsx')} disabled={!!exporting} className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-semibold disabled:opacity-50 border-none cursor-pointer">
+          <button onClick={() => handleExport('xlsx')} disabled={!!exporting} className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-semibold disabled:opacity-50 border-none cursor-pointer">
             {exporting === 'xlsx' ? <LoadingSpinner size={16} /> : <Download size={16} />}
             Excel
           </button>
@@ -202,7 +202,7 @@ export default function ReportsPage(): JSX.Element {
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl" role="tablist">
         {tabs.map((tab) => (
-          <button key={tab.id} role="tab" aria-selected={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${activeTab === tab.id ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          <button key={tab.id} role="tab" aria-selected={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg  ${activeTab === tab.id ? 'bg-white text-indigo-700 ' : 'text-gray-500 hover:text-gray-700'}`}>
             {tab.icon}
             {tab.label}
           </button>
@@ -258,8 +258,8 @@ export default function ReportsPage(): JSX.Element {
                         labelFormatter={(day) => `Día ${day}`}
                         formatter={(value, name) => [typeof value === 'number' ? formatCurrency(value) : '—', name === 'actual' ? monthLabel(monthComparison.month) : monthLabel(monthComparison.previousMonth)]}
                       />
-                      <Bar dataKey="anterior" fill="#cbd5e1" radius={[3, 3, 0, 0]} name="anterior" />
-                      <Bar dataKey="actual" fill="#6366f1" radius={[3, 3, 0, 0]} name="actual" />
+                      <Bar isAnimationActive={false} dataKey="anterior" fill="#cbd5e1" radius={[3, 3, 0, 0]} name="anterior" />
+                      <Bar isAnimationActive={false} dataKey="actual" fill="#6366f1" radius={[3, 3, 0, 0]} name="actual" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -292,7 +292,7 @@ export default function ReportsPage(): JSX.Element {
                     <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={64} tickFormatter={(v: number) => formatCompactCurrency(v)} />
                     <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }} formatter={(value: number) => [formatCurrency(value), 'Total']} />
-                    <Bar dataKey="total" radius={[4, 4, 0, 0]} name="total">
+                    <Bar isAnimationActive={false} dataKey="total" radius={[4, 4, 0, 0]} name="total">
                     {paymentMethods.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={['#6366f1', '#10b981', '#f59e0b'][index % 3]} />
                     ))}
@@ -362,7 +362,7 @@ export default function ReportsPage(): JSX.Element {
                     <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} minTickGap={12} />
                     <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={64} tickFormatter={(v: number) => formatCompactCurrency(v)} />
                     <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }} formatter={(value: number) => [formatCurrency(value), 'Ingresos']} />
-                    <Line type="monotone" dataKey="ingresos" stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} />
+                    <Line isAnimationActive={false} type="monotone" dataKey="ingresos" stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>

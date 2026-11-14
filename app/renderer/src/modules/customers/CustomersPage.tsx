@@ -240,7 +240,7 @@ export default function CustomersPage(): JSX.Element {
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); handleOpenEdit(row); }}
-          className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
+          className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg"
         >
           <Edit3 size={14} />
           Editar
@@ -307,7 +307,7 @@ export default function CustomersPage(): JSX.Element {
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); setPayDebtTarget(row); setPayAmount(String(row.remaining)); }}
-          className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors"
+          className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg"
         >
           <DollarSign size={14} />
           Pagar
@@ -332,7 +332,7 @@ export default function CustomersPage(): JSX.Element {
             <button
               type="button"
               onClick={handleOpenCreate}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700"
             >
               <Plus size={16} />
               Nuevo cliente
@@ -353,7 +353,7 @@ export default function CustomersPage(): JSX.Element {
 
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600" />
+              <div className="rounded-full h-6 w-6 border-b-2 border-indigo-600" />
             </div>
           ) : customers.length === 0 ? (
             <div className="text-center py-8">
@@ -365,7 +365,7 @@ export default function CustomersPage(): JSX.Element {
                 <button
                   type="button"
                   onClick={handleOpenCreate}
-                  className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+                  className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700"
                 >
                   <Plus size={16} />
                   Crear primer cliente
@@ -421,7 +421,7 @@ export default function CustomersPage(): JSX.Element {
               <button
                 type="button"
                 onClick={() => setDetailTab('history')}
-                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                className={`px-4 py-2.5 text-sm font-medium border-b-2  ${
                   detailTab === 'history'
                     ? 'border-indigo-600 text-indigo-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -433,7 +433,7 @@ export default function CustomersPage(): JSX.Element {
               <button
                 type="button"
                 onClick={() => setDetailTab('debts')}
-                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                className={`px-4 py-2.5 text-sm font-medium border-b-2  ${
                   detailTab === 'debts'
                     ? 'border-indigo-600 text-indigo-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -451,7 +451,7 @@ export default function CustomersPage(): JSX.Element {
 
             {detailLoading ? (
               <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600" />
+                <div className="rounded-full h-6 w-6 border-b-2 border-indigo-600" />
               </div>
             ) : detailTab === 'history' ? (
               customerHistory.length === 0 ? (
@@ -495,7 +495,7 @@ export default function CustomersPage(): JSX.Element {
             <button
               type="button"
               onClick={() => { setShowForm(false); setFormData(emptyForm); setEditingCustomer(null); }}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg"
             >
               Cancelar
             </button>
@@ -578,7 +578,7 @@ export default function CustomersPage(): JSX.Element {
             <button
               type="button"
               onClick={() => { setPayDebtTarget(null); setPayAmount(''); }}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg"
             >
               Cancelar
             </button>

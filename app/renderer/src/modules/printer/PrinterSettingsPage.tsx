@@ -140,7 +140,7 @@ export default function PrinterSettingsPage(): JSX.Element {
                     key={type}
                     type="button"
                     onClick={() => setForm((prev) => ({ ...prev, type }))}
-                    className={`px-4 py-2.5 rounded-lg text-sm font-semibold border-2 transition-all cursor-pointer ${
+                    className={`px-4 py-2.5 rounded-lg text-sm font-semibold border-2  cursor-pointer ${
                       form.type === type
                         ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
                         : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
@@ -161,7 +161,7 @@ export default function PrinterSettingsPage(): JSX.Element {
                     onClick={loadPrinters}
                     className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-700 cursor-pointer"
                   >
-                    <RefreshCw size={12} className={loadingPrinters ? 'animate-spin' : ''} />
+                    <RefreshCw size={12} className={loadingPrinters ? '' : ''} />
                     Refrescar
                   </button>
                 </label>

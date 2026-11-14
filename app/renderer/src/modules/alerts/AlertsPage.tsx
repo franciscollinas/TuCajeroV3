@@ -121,8 +121,8 @@ export default function AlertsPage(): JSX.Element {
       <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
         <button
           onClick={() => setActiveTab('stock')}
-          className={`px-4 py-2 text-sm font-semibold rounded-md transition-all border-none cursor-pointer ${
-            activeTab === 'stock' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+          className={`px-4 py-2 text-sm font-semibold rounded-md  border-none cursor-pointer ${
+            activeTab === 'stock' ? 'bg-white text-gray-900 ' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           <span className="flex items-center gap-2">
@@ -132,8 +132,8 @@ export default function AlertsPage(): JSX.Element {
         </button>
         <button
           onClick={() => setActiveTab('expiry')}
-          className={`px-4 py-2 text-sm font-semibold rounded-md transition-all border-none cursor-pointer ${
-            activeTab === 'expiry' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+          className={`px-4 py-2 text-sm font-semibold rounded-md  border-none cursor-pointer ${
+            activeTab === 'expiry' ? 'bg-white text-gray-900 ' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           <span className="flex items-center gap-2">

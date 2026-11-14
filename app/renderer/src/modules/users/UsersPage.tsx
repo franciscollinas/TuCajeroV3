@@ -193,7 +193,7 @@ export default function UsersPage(): JSX.Element {
         <div className="flex justify-end gap-2">
           <button
             onClick={() => openEdit(u)}
-            className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+            className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
             title="Editar"
           >
             <Pencil size={15} />
@@ -203,7 +203,7 @@ export default function UsersPage(): JSX.Element {
               setToggleUserId(u.id);
               setToggleActive(!u.active);
             }}
-            className={`p-1.5 rounded-lg transition-colors ${
+            className={`p-1.5 rounded-lg  ${
               u.active
                 ? 'text-gray-500 hover:text-red-600 hover:bg-red-50'
                 : 'text-gray-500 hover:text-green-600 hover:bg-green-50'
@@ -228,7 +228,7 @@ export default function UsersPage(): JSX.Element {
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-violet-700 to-purple-800 p-6 text-white">
+      <div className="relative overflow-hidden rounded-2xl bg-violet-700 p-6 text-white">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-32 translate-x-32 pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-24 -translate-x-24 pointer-events-none" />
         <div className="relative z-10">
@@ -243,7 +243,7 @@ export default function UsersPage(): JSX.Element {
         actions={
           <button
             onClick={openCreate}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded-lg transition-colors"
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded-lg"
           >
             <Plus size={16} />
             {es.users.createAction}

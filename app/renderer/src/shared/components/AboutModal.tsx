@@ -20,15 +20,15 @@ export const AboutModal = memo(function AboutModal({ open, onClose }: AboutModal
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-xl max-w-md w-[90%] overflow-hidden shadow-2xl"
-        style={{ animation: 'slideUp 0.3s ease' }}>
-        <div className="bg-gradient-to-br from-purple-500 to-indigo-600 px-6 pt-8 pb-6 text-center text-white relative">
+        className="bg-white rounded-xl max-w-md w-[90%] overflow-hidden"
+        style={{ }}>
+        <div className="bg-indigo-600 px-6 pt-8 pb-6 text-center text-white relative">
           <button onClick={onClose} className="absolute top-3 right-3 bg-white/20 border-none rounded-full w-8 h-8 flex items-center justify-center text-white cursor-pointer hover:bg-white/30">
             <X size={16} />
           </button>
-          <div className="w-20 h-20 rounded-xl bg-white flex items-center justify-center mx-auto mb-4 border-2 border-white/60 shadow-lg">
+          <div className="w-20 h-20 rounded-xl bg-white flex items-center justify-center mx-auto mb-4 border-2 border-white/60">
             <img src={LOGO_URL} alt="TuCajero" className="w-14 h-14 object-contain" />
           </div>
           <h2 className="text-2xl font-extrabold m-0">TuCajero</h2>

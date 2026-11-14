@@ -54,7 +54,7 @@ const ProductCard = memo(function ProductCard({
       onClick={() => !blocked && onAdd(product)}
       onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !blocked) { e.preventDefault(); onAdd(product); } }}
       aria-label={`${product.name}, ${formatCurrency(product.price)}, ${expired ? expiredText : outOfStock ? 'Sin stock' : `Stock: ${product.stock}`}`}
-      className="tc-card tc-glow-hover animate-slideUp"
+      className="tc-card"
       aria-disabled={blocked}
       title={expiredText || undefined}
       style={{
@@ -70,7 +70,7 @@ const ProductCard = memo(function ProductCard({
         <div
           style={{
             position: 'absolute', inset: 0,
-            background: 'repeating-linear-gradient(45deg, transparent, transparent 6px, rgba(0,0,0,0.03) 6px, rgba(0,0,0,0.03) 12px)',
+            background: 'rgba(0,0,0,0.04)',
             borderRadius: 'inherit', pointerEvents: 'none',
           }}
         />
@@ -636,7 +636,7 @@ export function POSPage(): JSX.Element {
   // --- No active cash state ---
   if (!activeCash) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '70vh', gap: 'var(--space-6)', animation: 'fadeIn 0.5s ease' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '70vh', gap: 'var(--space-6)', }}>
         <div className="tc-metric-icon tc-metric-icon--danger" style={{ width: '96px', height: '96px', borderRadius: 'var(--radius-3xl)' }}>
           <AlertCircle size={48} />
         </div>
@@ -667,12 +667,12 @@ export function POSPage(): JSX.Element {
 
   return (
     <>
-    <div style={{ padding: 'var(--space-6)', maxWidth: '1700px', margin: '0 auto', overflow: 'hidden', animation: 'fadeIn 0.3s ease' }}>
+    <div style={{ padding: 'var(--space-6)', maxWidth: '1700px', margin: '0 auto', overflow: 'hidden', }}>
       {/* Message banner */}
       {message && (
         <div className={`tc-notice tc-notice--${messageType === 'success' ? 'success' : messageType === 'error' ? 'error' : 'info'}`}
           role="alert" aria-live="assertive"
-          style={{ marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', animation: 'slideDown 0.3s ease' }}>
+          style={{ marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
             {messageType === 'success' ? <CheckCircle2 size={18} /> : messageType === 'error' ? <AlertCircle size={18} /> : <ScanLine size={18} />}
             <span style={{ fontWeight: 600 }}>{message}</span>
@@ -701,7 +701,7 @@ export function POSPage(): JSX.Element {
           </div>
 
           {/* Search */}
-          <div style={{ padding: 'var(--space-4)', flexShrink: 0, background: 'linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%)', borderRadius: 'var(--radius-xl)', border: '2px solid var(--brand-100)', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ padding: 'var(--space-4)', flexShrink: 0, background: '#f8f9ff', borderRadius: 'var(--radius-xl)', border: '2px solid var(--brand-100)', boxShadow: 'var(--shadow-sm)' }}>
             <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
               <div style={{ position: 'relative', flex: 1 }}>
                 <Search style={{ position: 'absolute', left: 'var(--space-4)', top: '50%', transform: 'translateY(-50%)', color: 'var(--brand-500)', pointerEvents: 'none' }} size={20} />
@@ -731,7 +731,6 @@ export function POSPage(): JSX.Element {
                   color: scanner.isScanning ? '#fff' : 'var(--gray-400)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   flexShrink: 0, transition: 'all var(--transition-fast)',
-                  animation: scanner.isScanning ? 'pulse 0.8s ease-in-out infinite' : 'none',
                 }}
               >
                 <ScanLine size={24} />
@@ -751,9 +750,9 @@ export function POSPage(): JSX.Element {
 
         {/* === RIGHT COLUMN - Cart === */}
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
-          <div className="tc-card tc-aurora-hairline" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', height: 'auto', border: '2px solid var(--brand-100)', boxShadow: 'var(--shadow-xl)', padding: 0, animation: 'slideInRight 0.4s ease' }}>
+          <div className="tc-card tc-aurora-hairline" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', height: 'auto', border: '2px solid var(--brand-100)', boxShadow: 'var(--shadow-xl)', padding: 0, }}>
             {/* Cart Header */}
-            <div style={{ padding: 'var(--space-4)', background: 'linear-gradient(135deg, var(--brand-600) 0%, var(--brand-500) 100%)', borderBottom: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 8px rgba(54, 65, 245, 0.2)' }}>
+            <div style={{ padding: 'var(--space-4)', background: 'var(--brand-600)', borderBottom: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 8px rgba(54, 65, 245, 0.2)' }}>
               <h3 style={{ margin: 0, fontWeight: 800, fontSize: 'var(--text-lg)', color: '#fff', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                 <ShoppingCart size={22} />
                 Carrito de Venta
@@ -766,7 +765,7 @@ export function POSPage(): JSX.Element {
             </div>
 
             {/* Customer Picker */}
-            <div style={{ padding: 'var(--space-3)', background: 'linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%)', borderBottom: '2px solid var(--brand-100)' }}>
+            <div style={{ padding: 'var(--space-3)', background: '#f8f9ff', borderBottom: '2px solid var(--brand-100)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                 <div style={{ position: 'relative', flex: 1 }}>
                   <User style={{ position: 'absolute', left: 'var(--space-3)', top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', pointerEvents: 'none' }} size={16} />
@@ -802,8 +801,8 @@ export function POSPage(): JSX.Element {
             <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-4)', background: 'var(--gray-50)', minHeight: '200px' }}>
               {cart.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                  {cart.map((item, idx) => (
-                    <div key={item.product.id} className="animate-slideUp" style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', background: '#fff', padding: 'var(--space-3)', borderRadius: 'var(--radius-xl)', borderLeft: '4px solid var(--brand-500)', borderRight: '1px solid var(--gray-200)', borderTop: '1px solid var(--gray-200)', borderBottom: '1px solid var(--gray-200)', boxShadow: 'var(--shadow-xs)', animationDelay: `${idx * 50}ms` }}>
+                  {cart.map((item) => (
+                    <div key={item.product.id} className="" style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', background: '#fff', padding: 'var(--space-3)', borderRadius: 'var(--radius-xl)', borderLeft: '4px solid var(--brand-500)', borderRight: '1px solid var(--gray-200)', borderTop: '1px solid var(--gray-200)', borderBottom: '1px solid var(--gray-200)', boxShadow: 'var(--shadow-xs)', }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <h5 style={{ fontWeight: 700, color: 'var(--gray-800)', fontSize: 'var(--text-sm)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: '4px' }}>
                           {item.product.name}
@@ -840,7 +839,7 @@ export function POSPage(): JSX.Element {
                   ))}
                 </div>
               ) : (
-                <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%)', gap: 'var(--space-3)', padding: 'var(--space-10)' }}>
+                <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f8f9ff', gap: 'var(--space-3)', padding: 'var(--space-10)' }}>
                   <div style={{ width: '64px', height: '64px', borderRadius: 'var(--radius-2xl)', background: 'var(--brand-100)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <ShoppingCart size={32} style={{ color: 'var(--brand-400)' }} />
                   </div>
@@ -851,7 +850,7 @@ export function POSPage(): JSX.Element {
             </div>
 
             {/* Payment Panel */}
-            <div style={{ padding: 'var(--space-4)', background: 'linear-gradient(180deg, #fff 0%, #f8f9ff 100%)', borderTop: '2px solid var(--brand-200)' }}>
+            <div style={{ padding: 'var(--space-4)', background: '#fff', borderTop: '2px solid var(--brand-200)' }}>
               {/* Totales */}
               <div style={{ marginBottom: 'var(--space-3)' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '0 var(--space-1)', fontVariantNumeric: 'tabular-nums' }}>
@@ -906,8 +905,8 @@ export function POSPage(): JSX.Element {
                 onClick={openCheckout}
                 disabled={cart.length === 0 || showCheckoutModal}
                 aria-label={`Cobrar ${formatCurrency(total)}`}
-                className="tc-aurora-hover"
-                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-3)', padding: 'var(--space-4)', borderRadius: 'var(--radius-xl)', background: cart.length > 0 && !showCheckoutModal ? 'linear-gradient(135deg, var(--success-600) 0%, var(--success-500) 100%)' : 'var(--gray-300)', border: 'none', color: '#fff', fontWeight: 800, fontSize: 'var(--text-lg)', cursor: cart.length === 0 || showCheckoutModal ? 'not-allowed' : 'pointer', opacity: cart.length === 0 || showCheckoutModal ? 0.5 : 1, transition: 'all var(--transition-fast)', boxShadow: cart.length > 0 && !showCheckoutModal ? '0 4px 16px rgba(18, 183, 106, 0.5)' : 'none', marginBottom: 'var(--space-2)', minHeight: '56px' }}
+                className=""
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-3)', padding: 'var(--space-4)', borderRadius: 'var(--radius-xl)', background: cart.length > 0 && !showCheckoutModal ? 'var(--success-600)' : 'var(--gray-300)', border: 'none', color: '#fff', fontWeight: 800, fontSize: 'var(--text-lg)', cursor: cart.length === 0 || showCheckoutModal ? 'not-allowed' : 'pointer', opacity: cart.length === 0 || showCheckoutModal ? 0.5 : 1, transition: 'all var(--transition-fast)', boxShadow: cart.length > 0 && !showCheckoutModal ? '0 4px 16px rgba(18, 183, 106, 0.5)' : 'none', marginBottom: 'var(--space-2)', minHeight: '56px' }}
               >
                 <Banknote size={24} />
                 <span>Cobrar {formatCurrency(total)}</span>
@@ -930,7 +929,7 @@ export function POSPage(): JSX.Element {
           onClick={(e) => { if (e.target === e.currentTarget && !loading) closeCheckout(); }}>
           <div role="dialog" aria-modal="true" aria-label="Cobro" className="tc-aurora-frame" style={{ background: 'var(--gray-50)', borderRadius: 'var(--radius-2xl)', width: '95vw', maxWidth: '900px', maxHeight: '90vh', overflow: 'auto', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
             {/* Modal Header */}
-            <div style={{ padding: 'var(--space-4)', background: 'linear-gradient(135deg, var(--brand-600) 0%, var(--brand-500) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ padding: 'var(--space-4)', background: 'var(--brand-600)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h2 style={{ margin: 0, fontWeight: 800, fontSize: 'var(--text-xl)', color: '#fff', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                 <Banknote size={28} />
                 Cobro - Total: {formatCurrency(total)}
@@ -941,7 +940,7 @@ export function POSPage(): JSX.Element {
             </div>
 
             {modalError && (
-              <div style={{ margin: 'var(--space-4) var(--space-4) 0', padding: 'var(--space-3)', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 'var(--radius-md)', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'space-between', animation: 'slideDown 0.3s ease' }}>
+              <div style={{ margin: 'var(--space-4) var(--space-4) 0', padding: 'var(--space-3)', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 'var(--radius-md)', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'space-between', }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                   <AlertCircle size={18} />
                   <span style={{ fontWeight: 600 }}>{modalError}</span>
@@ -1000,7 +999,7 @@ export function POSPage(): JSX.Element {
                 </div>
 
                 {/* Totales */}
-                <div className="tc-card" style={{ padding: 'var(--space-4)', border: '2px solid var(--brand-200)', background: 'linear-gradient(135deg, var(--gray-50) 0%, #f0f4ff 100%)' }}>
+                <div className="tc-card" style={{ padding: 'var(--space-4)', border: '2px solid var(--brand-200)', background: 'var(--gray-50)' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ fontSize: 'var(--text-sm)', color: 'var(--gray-600)' }}>Subtotal</span>
@@ -1031,7 +1030,7 @@ export function POSPage(): JSX.Element {
 
                 {/* Pagos registrados */}
                 {payments.length > 0 && (
-                  <div style={{ padding: 'var(--space-3)', background: 'linear-gradient(135deg, var(--success-50) 0%, #d1fae5 100%)', borderRadius: 'var(--radius-lg)', border: '2px solid var(--success-200)' }}>
+                  <div style={{ padding: 'var(--space-3)', background: 'var(--success-50)', borderRadius: 'var(--radius-lg)', border: '2px solid var(--success-200)' }}>
                     <p style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--success-700)', marginBottom: 'var(--space-2)' }}>
                       ✓ Pagos: {formatCurrency(totalPaid)} / {formatCurrency(total)}
                     </p>
@@ -1071,7 +1070,7 @@ export function POSPage(): JSX.Element {
 
                   {/* Cash input */}
                   {paymentStep === 'cash' && (
-                    <div style={{ padding: 'var(--space-4)', background: 'linear-gradient(135deg, var(--success-50) 0%, #d1fae5 100%)', borderRadius: 'var(--radius-lg)', border: '2px solid var(--success-300)' }}>
+                    <div style={{ padding: 'var(--space-4)', background: 'var(--success-50)', borderRadius: 'var(--radius-lg)', border: '2px solid var(--success-300)' }}>
                       <p style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--success-700)', marginBottom: 'var(--space-3)', textAlign: 'center' }}>¿Con cuánto paga?</p>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-2)', padding: 'var(--space-2)', background: '#fff', borderRadius: 'var(--radius-md)' }}>
                         <span style={{ fontSize: 'var(--text-sm)' }}>Total:</span>
@@ -1106,7 +1105,7 @@ export function POSPage(): JSX.Element {
                         </div>
                       )}
                       <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                        <button onClick={confirmCashPayment} disabled={cashReceived < remaining} style={{ flex: 1, padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: cashReceived >= remaining ? 'linear-gradient(135deg, var(--success-600) 0%, var(--success-500) 100%)' : 'var(--gray-300)', border: 'none', color: '#fff', fontWeight: 700, cursor: cashReceived >= remaining ? 'pointer' : 'not-allowed' }}>
+                        <button onClick={confirmCashPayment} disabled={cashReceived < remaining} style={{ flex: 1, padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: cashReceived >= remaining ? 'var(--success-600)' : 'var(--gray-300)', border: 'none', color: '#fff', fontWeight: 700, cursor: cashReceived >= remaining ? 'pointer' : 'not-allowed' }}>
                           {cashReceived >= remaining ? 'Confirmar' : 'Monto insuficiente'}
                         </button>
                         <button onClick={() => { setPaymentStep('options'); setCashReceived(0); setSelectedMethod(null); }} style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'transparent', border: '1px solid var(--gray-300)', color: 'var(--gray-600)', fontWeight: 600, cursor: 'pointer' }}>
@@ -1118,14 +1117,14 @@ export function POSPage(): JSX.Element {
 
                   {/* MIXTO Step 1 */}
                   {paymentStep === 'mixed-step-1' && (
-                    <div style={{ padding: 'var(--space-4)', background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)', borderRadius: 'var(--radius-lg)', border: '2px solid #f59e0b' }}>
+                    <div style={{ padding: 'var(--space-4)', background: '#fef3c7', borderRadius: 'var(--radius-lg)', border: '2px solid #f59e0b' }}>
                       <p style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: '#92400e', marginBottom: 'var(--space-3)', textAlign: 'center' }}>¿Cuánto paga en efectivo?</p>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-2)', padding: 'var(--space-2)', background: '#fff', borderRadius: 'var(--radius-md)' }}>
                         <span style={{ fontSize: 'var(--text-xs)', color: 'var(--gray-600)' }}>Total a pagar:</span>
                         <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--gray-800)' }}>{formatCurrency(total)}</span>
                       </div>
                       <input type="number" value={mixtoCashAmount || ''} onChange={(e) => setMixtoCashAmount(Math.max(0, Number(e.target.value)))} placeholder="Monto en efectivo" autoFocus style={{ width: '100%', padding: 'var(--space-3)', fontSize: 'var(--text-lg)', fontWeight: 700, textAlign: 'center', border: '2px solid #f59e0b', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-3)', outline: 'none' }} />
-                      <button onClick={confirmMixtoCash} disabled={mixtoCashAmount <= 0 || mixtoCashAmount >= total} style={{ width: '100%', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: mixtoCashAmount > 0 && mixtoCashAmount < total ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' : 'var(--gray-300)', border: 'none', color: '#fff', fontWeight: 700, cursor: mixtoCashAmount > 0 && mixtoCashAmount < total ? 'pointer' : 'not-allowed' }}>
+                      <button onClick={confirmMixtoCash} disabled={mixtoCashAmount <= 0 || mixtoCashAmount >= total} style={{ width: '100%', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: mixtoCashAmount > 0 && mixtoCashAmount < total ? '#f59e0b' : 'var(--gray-300)', border: 'none', color: '#fff', fontWeight: 700, cursor: mixtoCashAmount > 0 && mixtoCashAmount < total ? 'pointer' : 'not-allowed' }}>
                         Continuar
                       </button>
                       <button onClick={() => { setPaymentStep('options'); setMixtoCashAmount(0); }} style={{ width: '100%', marginTop: 'var(--space-2)', padding: 'var(--space-2)', borderRadius: 'var(--radius-md)', background: 'transparent', border: '1px solid #f59e0b', color: '#92400e', fontWeight: 600, cursor: 'pointer' }}>
@@ -1136,7 +1135,7 @@ export function POSPage(): JSX.Element {
 
                   {/* MIXTO Step 2 */}
                   {paymentStep === 'mixed-step-2' && (
-                    <div style={{ padding: 'var(--space-4)', background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)', borderRadius: 'var(--radius-lg)', border: '2px solid #f59e0b' }}>
+                    <div style={{ padding: 'var(--space-4)', background: '#fef3c7', borderRadius: 'var(--radius-lg)', border: '2px solid #f59e0b' }}>
                       <p style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: '#92400e', marginBottom: 'var(--space-3)', textAlign: 'center' }}>
                         Efectivo: {formatCurrency(mixtoCashAmount)} — Seleccione segundo método
                       </p>
@@ -1163,10 +1162,10 @@ export function POSPage(): JSX.Element {
                   const isCreditFlow = hasCreditPayment && selectedCustomerId;
                   return (
                     <button onClick={handleCompleteSale} disabled={loading || remaining > 0.1 || cart.length === 0}
-                      className="tc-btn tc-btn--success" style={{ width: '100%', minHeight: '56px', fontSize: 'var(--text-lg)', fontWeight: 800, textTransform: 'uppercase', borderRadius: 'var(--radius-lg)', background: remaining > 0.1 ? 'var(--gray-300)' : isCreditFlow ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' : 'linear-gradient(135deg, var(--success-600) 0%, var(--success-500) 100%)', opacity: remaining > 0.1 || cart.length === 0 ? 0.6 : 1 }}>
+                      className="tc-btn tc-btn--success" style={{ width: '100%', minHeight: '56px', fontSize: 'var(--text-lg)', fontWeight: 800, textTransform: 'uppercase', borderRadius: 'var(--radius-lg)', background: remaining > 0.1 ? 'var(--gray-300)' : isCreditFlow ? '#f59e0b' : 'var(--success-600)', opacity: remaining > 0.1 || cart.length === 0 ? 0.6 : 1 }}>
                       {loading ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                          <div style={{ width: '20px', height: '20px', border: '2px solid rgba(255,255,255,0.3)', borderTop: '2px solid #fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                          <div style={{ width: '20px', height: '20px', border: '2px solid rgba(255,255,255,0.3)', borderTop: '2px solid #fff', borderRadius: '50%', }} />
                           <span>Procesando...</span>
                         </div>
                       ) : remaining > 0.1 ? (

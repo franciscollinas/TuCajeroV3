@@ -4,7 +4,6 @@ import { User, Lock, Check, AlertTriangle } from 'lucide-react';
 
 import { useAuth } from '../../shared/context/AuthContext';
 import { es } from '../../shared/i18n';
-import { GrainOverlay } from '../../shared/components/GrainOverlay';
 import { LOGO_URL } from '../../shared/utils/assets';
 
 export function LoginPage(): JSX.Element {
@@ -43,19 +42,12 @@ export function LoginPage(): JSX.Element {
         placeItems: 'center',
         padding: '24px',
         position: 'relative',
-        background:
-          'radial-gradient(circle at 15% 20%, rgba(70, 95, 255, 0.10), transparent 45%), radial-gradient(circle at 85% 80%, rgba(245, 158, 11, 0.08), transparent 40%), linear-gradient(180deg, #f9fafb 0%, #eef2ff 100%)',
+        background: '#f9fafb',
         overflow: 'hidden',
       }}
     >
-      <GrainOverlay />
-
-      {/* Decorative blobs */}
-      <div style={{ position: 'absolute', top: '-10%', left: '-5%', width: 380, height: 380, background: 'var(--gradient-brand)', opacity: 0.12, borderRadius: '50%', filter: 'blur(20px)', pointerEvents: 'none' }} />
-      <div style={{ position: 'absolute', bottom: '-12%', right: '-8%', width: 420, height: 420, background: 'var(--gradient-amber)', opacity: 0.10, borderRadius: '50%', filter: 'blur(20px)', pointerEvents: 'none' }} />
-
       <div
-        className="tc-card tc-stagger tc-aurora-frame"
+        className="tc-card tc-aurora-frame"
         style={{
           width: 'min(440px, 100%)',
           padding: '40px',
@@ -75,7 +67,7 @@ export function LoginPage(): JSX.Element {
             width={84}
             height={84}
             style={{ display: 'inline-block', marginBottom: '14px', objectFit: 'contain' }}
-            className="animate-fadeUp"
+            className=""
           />
           <h1 className="tc-display" style={{ margin: 0, fontSize: '26px', fontWeight: 800, color: 'var(--gray-900)', letterSpacing: '-0.02em' }}>
             {es.app.name}

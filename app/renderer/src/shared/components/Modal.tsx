@@ -68,14 +68,14 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md', c
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center tc-overlay-glass animate-fadeIn p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center tc-overlay-glass p-4"
       role="dialog"
       aria-modal="true"
       aria-label={title || 'Diálogo'}
     >
       <div
         ref={modalRef}
-        className={`tc-card tc-aurora-frame animate-scaleIn ${className}`}
+        className={`tc-card tc-aurora-frame  ${className}`}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
         tabIndex={-1}
@@ -93,7 +93,7 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md', c
         }}
       >
         {title && (
-          <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-gradient-surface">
+          <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-gray-50">
             <h3 className="tc-display text-lg font-semibold text-gray-900 m-0">{title}</h3>
             <button onClick={onClose} className="bg-transparent border-none cursor-pointer p-1 text-gray-400 flex" aria-label="Cerrar"><X size={20} /></button>
           </div>

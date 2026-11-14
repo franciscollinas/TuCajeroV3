@@ -204,7 +204,7 @@ export function SalesHistoryPage(): JSX.Element {
   return (
     <div className="tc-page-container">
       {/* Page Header */}
-      <section className="tc-section animate-slideDown">
+      <section className="tc-section">
         <div className="tc-section-header">
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-1)' }}>
@@ -239,7 +239,7 @@ export function SalesHistoryPage(): JSX.Element {
 
         {message && (
           <div className={`tc-notice tc-notice--${messageType === 'success' ? 'success' : messageType === 'error' ? 'error' : 'info'}`}
-            style={{ marginTop: 'var(--space-4)', animation: 'slideDown 0.3s ease-out', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            style={{ marginTop: 'var(--space-4)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span>{message}</span>
             <button onClick={() => setMessage('')} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: '4px' }}>
               <X size={16} />
@@ -277,7 +277,7 @@ export function SalesHistoryPage(): JSX.Element {
       </section>
 
       {/* Sales List */}
-      <section className="tc-section animate-slideUp">
+      <section className="tc-section">
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-12)' }}>
             <div className="tc-skeleton tc-skeleton--circle" style={{ width: '48px', height: '48px' }} />
@@ -315,7 +315,7 @@ export function SalesHistoryPage(): JSX.Element {
                 const isToday = dateKey === new Date().toISOString().split('T')[0];
 
                 return (
-                  <div key={dateKey} style={{ animation: 'slideUp 0.3s ease-out' }}>
+                  <div key={dateKey} style={{ }}>
                     {/* Day header */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0', background: isToday ? 'var(--gradient-primary)' : 'var(--gray-100)', border: isToday ? 'none' : '1px solid var(--border-light)', borderBottom: 'none' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
@@ -466,9 +466,9 @@ function SaleDetailModal({
   onCancel?: (sale: SaleRecord) => void;
 }): JSX.Element {
   return (
-    <div className="tc-modal-overlay" onClick={onClose} style={{ animation: 'fadeIn 0.2s ease-out' }}>
+    <div className="tc-modal-overlay" onClick={onClose} style={{ }}>
       <div className="tc-modal" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}
-        style={{ width: 'min(640px, 100%)', padding: 0, gap: 0, animation: 'scaleIn 0.3s ease-out', overflow: 'hidden' }}>
+        style={{ width: 'min(640px, 100%)', padding: 0, gap: 0, overflow: 'hidden' }}>
         {/* Header */}
         <div style={{ background: 'var(--gradient-primary)', padding: 'var(--space-6)', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'relative', zIndex: 1 }}>

@@ -177,7 +177,7 @@ export default function DashboardPage(): JSX.Element {
         </div>
       )}
       {/* ── Welcome Header ── */}
-      <div className="relative overflow-hidden rounded-2xl p-6 text-white" style={{ background: 'linear-gradient(135deg, #3641f5, #2a31d8, #1e24b5)' }}>
+      <div className="relative overflow-hidden rounded-2xl p-6 text-white" style={{ background: '#3641f5' }}>
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-32 translate-x-32 pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-24 -translate-x-24 pointer-events-none" />
         <div className="relative z-10 flex items-center justify-between flex-wrap gap-4">
@@ -196,11 +196,11 @@ export default function DashboardPage(): JSX.Element {
             </div>
           </div>
           <div className="flex gap-3 flex-wrap items-start">
-            <button onClick={() => navigate('/sales')} className="inline-flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 rounded-lg text-sm font-medium transition-colors">
+            <button onClick={() => navigate('/sales')} className="inline-flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 rounded-lg text-sm font-medium">
               <ShoppingCart size={16} />
               {es.sales.posTitle}
             </button>
-            <button onClick={() => navigate('/inventory')} className="inline-flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 rounded-lg text-sm font-medium transition-colors">
+            <button onClick={() => navigate('/inventory')} className="inline-flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 rounded-lg text-sm font-medium">
               <Package size={16} />
               {es.inventory.title}
             </button>
@@ -284,23 +284,23 @@ export default function DashboardPage(): JSX.Element {
                 </div>
                 
                 {showCloseInput ? (
-                  <div className="mt-2 flex flex-col gap-2 animate-slideDown">
+                  <div className="mt-2 flex flex-col gap-2">
                     <div className="relative">
                       <DollarSign size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input type="number" step="1" min="0" value={finalCash} onChange={(e) => setFinalCash(e.target.value)} placeholder={es.cash.finalCash} className="pl-7 pr-2 py-1.5 border border-gray-300 rounded-lg text-sm w-full focus:outline-none focus:ring-2 focus:ring-red-500" autoFocus />
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={handleCloseCash} disabled={cashLoading || !finalCash} className="flex-1 inline-flex justify-center items-center gap-1.5 px-2 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white text-xs font-semibold rounded-lg transition-colors">
+                      <button onClick={handleCloseCash} disabled={cashLoading || !finalCash} className="flex-1 inline-flex justify-center items-center gap-1.5 px-2 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white text-xs font-semibold rounded-lg">
                         {cashLoading ? <LoadingSpinner size={14} /> : <Lock size={14} />}
                         Cerrar
                       </button>
-                      <button onClick={() => { setShowCloseInput(false); setFinalCash(''); }} className="px-3 py-1.5 text-xs font-semibold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                      <button onClick={() => { setShowCloseInput(false); setFinalCash(''); }} className="px-3 py-1.5 text-xs font-semibold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg">
                         Cancelar
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <button onClick={() => setShowCloseInput(true)} className="mt-1 w-full inline-flex justify-center items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-bold rounded-lg transition-colors">
+                  <button onClick={() => setShowCloseInput(true)} className="mt-1 w-full inline-flex justify-center items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-bold rounded-lg">
                     <Lock size={14} />
                     {es.cashSession.close}
                   </button>
@@ -319,7 +319,7 @@ export default function DashboardPage(): JSX.Element {
                     <DollarSign size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input type="number" step="1" min="0" value={initialCash} onChange={(e) => setInitialCash(e.target.value)} placeholder={es.cashSession.openAmount} className="pl-7 pr-2 py-1.5 border border-gray-300 rounded-lg text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                   </div>
-                  <button onClick={handleOpenCash} disabled={cashLoading || !initialCash} className="w-full inline-flex justify-center items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-xs font-bold rounded-lg transition-colors">
+                  <button onClick={handleOpenCash} disabled={cashLoading || !initialCash} className="w-full inline-flex justify-center items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-xs font-bold rounded-lg">
                     {cashLoading ? <LoadingSpinner size={14} /> : <Unlock size={14} />}
                     {es.cashSession.open}
                   </button>
@@ -335,8 +335,8 @@ export default function DashboardPage(): JSX.Element {
         {/* Sales Trend */}
         <Card title={dashboardPeriod === 'week' ? 'Tendencia semanal' : 'Tendencia 30 días'} className="lg:col-span-2">
           <div className="flex gap-2 mb-4">
-            <button onClick={() => setDashboardPeriod('week')} className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${dashboardPeriod === 'week' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>7 días</button>
-            <button onClick={() => setDashboardPeriod('month')} className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${dashboardPeriod === 'month' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>30 días</button>
+            <button onClick={() => setDashboardPeriod('week')} className={`px-3 py-1.5 text-xs font-semibold rounded-lg  ${dashboardPeriod === 'week' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>7 días</button>
+            <button onClick={() => setDashboardPeriod('month')} className={`px-3 py-1.5 text-xs font-semibold rounded-lg  ${dashboardPeriod === 'month' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>30 días</button>
           </div>
           {activeChart && activeChart.length > 0 ? (
             <div className="h-72">
@@ -355,7 +355,7 @@ export default function DashboardPage(): JSX.Element {
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <RePieChart>
-                  <Pie data={summary.paymentMethods} cx="50%" cy="50%" innerRadius={40} outerRadius={80} paddingAngle={3} dataKey="total" nameKey="label">
+                  <Pie isAnimationActive={false} data={summary.paymentMethods} cx="50%" cy="50%" innerRadius={40} outerRadius={80} paddingAngle={3} dataKey="total" nameKey="label">
                     {summary.paymentMethods.map((_, i) => (
                       <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                     ))}
@@ -394,14 +394,14 @@ export default function DashboardPage(): JSX.Element {
                   return (
                     <Fragment key={sale.id}>
                       <tr
-                        className={`cursor-pointer transition-colors ${isExpanded ? 'bg-indigo-50/60' : 'hover:bg-gray-50'}`}
+                        className={`cursor-pointer  ${isExpanded ? 'bg-indigo-50/60' : 'hover:bg-gray-50'}`}
                         onClick={() => toggleSaleExpand(sale.id)}
                       >
                         <td className="px-2 py-3 border-b border-gray-100">
                           <button
                             type="button"
                             onClick={() => toggleSaleExpand(sale.id)}
-                            className="inline-flex items-center justify-center w-6 h-6 rounded-md text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                            className="inline-flex items-center justify-center w-6 h-6 rounded-md text-gray-400 hover:text-indigo-600 hover:bg-indigo-50"
                             aria-label={isExpanded ? 'Ocultar productos' : 'Ver productos'}
                           >
                             {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -471,7 +471,7 @@ export default function DashboardPage(): JSX.Element {
                 </thead>
                 <tbody>
                   {summary.topProducts.map((p, i) => (
-                    <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={p.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 border-b border-gray-100">
                         <div className="flex items-center gap-3">
                           <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center">{i + 1}</span>
@@ -503,7 +503,7 @@ export default function DashboardPage(): JSX.Element {
                   <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={64} tickFormatter={(v: number) => formatCompactCurrency(v)} />
                   <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0' }} formatter={(value: number) => [formatCurrency(value), 'Ventas']} />
-                  <Bar dataKey="value" radius={[4, 4, 0, 0]} name="Ventas">
+                  <Bar isAnimationActive={false} dataKey="value" radius={[4, 4, 0, 0]} name="Ventas">
                     {summary.topCategories.map((entry, index) => (
                       <Cell key={index} fill={entry.color ?? PIE_COLORS[index % PIE_COLORS.length]} />
                     ))}

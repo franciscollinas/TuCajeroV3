@@ -19,7 +19,7 @@ export function LoadingButton({ loading, variant = 'primary', size = 'md', child
   const sizeClass = size === 'sm' ? 'tc-btn-sm' : '';
   return (
     <button className={`tc-btn ${sizeClass} ${variantClasses[variant]} ${loading ? 'is-loading' : ''} ${className}`} disabled={disabled || loading} aria-busy={loading || undefined} {...props}>
-      {loading && <Loader2 size={size === 'sm' ? 14 : 16} className="animate-spin" />}
+      {loading && <Loader2 size={size === 'sm' ? 14 : 16} className="" />}
       {children}
     </button>
   );
